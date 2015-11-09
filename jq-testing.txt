@@ -1,6 +1,11 @@
 ## jq Commands for Tweet Filtering
 
+## NOTE: jq doesn't seem to like multiline commands with spaces. The spacing here is for
+##  	 readability, but you may need to collapse to a single line when running.
+##    	 (If there's a way to enter multi-line commands, let me know!)
 
+
+## As of 09 NOV:
 ## currently working, but jq leaves duplicates
 ## so we pipe to uniq to remove dupes, then write to file
 
