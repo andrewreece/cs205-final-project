@@ -1,0 +1,43 @@
+## jq Commands for Tweet Filtering
+
+
+## currently working, but jq leaves duplicates
+## so we pipe to uniq to remove dupes, then write to file
+
+## operations:
+cat 2015-09-16-20-00  
+| jq -c 'select( 
+			# no retweets
+			.retweeted_status==null 								and 
+			
+			# either geolocated or user-provided location (not necessarily current though)
+			((.geo | length) > 0 or (.user.location | length) > 0) 	and 
+			
+			# English language only
+			(.user.lang=="en") 										and 
+			
+			# includes these search terms ("gi" = regex flags, global, case-independent)
+			(.text|test("debate";"gi")) 							and 
+			
+			# no links (the idea is that linked tweets probably aren't personal sentiment)
+			(.entities.urls | length == 0)
+			) | 	
+			
+		# return dict of relevant attributes
+		{timestamp:.created_at,	
+		 screename:.user.screen_name,	
+		 location:.user.location,	
+		 geo:.geo,	
+		 tweet:.text,	
+		 # this reduce statement concats multiple hashtags onto one line
+		 hashtags:(reduce(.entities.hashtags[]| .text) as $item (""; . + $item+","))	
+		 }'
+		 
+# jq still returns a line for each hashtag in a tweet, even though each line has all of
+# the hashtags, thanks to the reduce statement. there is a way to get it to return only
+# one line per tweet, i think by using map(), but i can't figure it out. so we pipe the
+# jq output to the bash command "uniq", which does the job for us.
+| uniq 
+
+# write to file
+> test2.txt
