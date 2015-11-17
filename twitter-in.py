@@ -50,6 +50,7 @@ if response.status_code == 200:
 	print "Reponse Code = 200"
 	ct = 0
 	timesup = datetime.datetime(year,month,day,hour,minute).strftime('%s')
+
 	for line in response.iter_lines():  # Iterate over streaming tweets
 		if int(timesup) > time.time():
 			#print(line.decode('utf8'))
