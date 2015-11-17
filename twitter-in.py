@@ -40,12 +40,16 @@ response  = requests.get(query_url, auth=config_token, stream=True)
 BATCH_INTERVAL = 60  # How frequently to update (seconds)
 BLOCKSIZE = 50  # How many tweets per update
 
-hour = time.localtime().tm_hour
+year   = time.localtime().tm_year
+month  = time.localtime().tm_mon
+day    = time.localtime().tm_mday
+hour   = time.localtime().tm_hour
 minute = time.localtime().tm_min + 2
 
 if response.status_code == 200:
+	print "Reponse Code = 200"
 	ct = 0
-	timesup = datetime.datetime(2015,11,11,hour,minute).strftime('%s')
+	timesup = datetime.datetime(year,month,day,hour,minute).strftime('%s')
 	for line in response.iter_lines():  # Iterate over streaming tweets
 		if int(timesup) > time.time():
 			#print(line.decode('utf8'))

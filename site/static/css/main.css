@@ -1,0 +1,7 @@
+#tweet {
+	width:500px,
+	display:block;
+	height:300px;
+	font-family:consolas;
+	border: solid 2px green;
+}
