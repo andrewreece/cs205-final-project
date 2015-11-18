@@ -6,7 +6,7 @@ then
 ZOOKEEPERV=3.4.6
 wget  --no-check-certificate http://apache.mirrors.tds.net/zookeeper/stable/zookeeper-${ZOOKEEPERV}.tar.gz
 tar vxzf zookeeper*tar.gz
-cd zookeeper-3.4.5
+cd zookeeper-$ZOOKEEPERV
 mv conf/zoo_sample.cfg conf/zoo.cfg
 sudo bin/zkServer.sh start
 fi
