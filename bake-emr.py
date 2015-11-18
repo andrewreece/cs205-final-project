@@ -86,20 +86,21 @@ bootstraps = [
 				  }
 				},
 				{
-				  'Name':'Start up Kafka',
+				  'Name':'Install Kafka',
 				  'ScriptBootstrapAction': {
 				  		'Path':'s3://cs205-final-project/setup/startup/kafka.sh'
-				  }
-				},
-				{
-				  'Name':'Start Kafka topic "tweets"',
-				  'ScriptBootstrapAction': {
-				  		'Path':'s3://cs205-final-project/setup/startup/kafka-topic.sh'
 				  }
 				}
 			 ]
 
-'''steps = [
+steps = [
+	        {
+	            'Name': 'Start Kafka server',
+	            'ActionOnFailure': 'TERMINATE_CLUSTER',
+	            'HadoopJarStep': {
+	                'Jar': 's3://cs205-final-project/setup/startup/kafka-start.sh'
+	            }
+	        },
 	        {
 	            'Name': 'Start Kafka topic "tweets"',
 	            'ActionOnFailure': 'TERMINATE_CLUSTER',
@@ -108,7 +109,7 @@ bootstraps = [
 	            }
 	        }
 		]
-'''
+
 
 response = emrclient.run_job_flow(
 									Name='agr-test-cluster',
