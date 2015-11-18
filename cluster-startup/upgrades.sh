@@ -1,5 +1,4 @@
 #!/bin/bash
-sudo yum upgrade
 
 # switch to python 2.7.9
 sudo alternatives --set python /usr/bin/python2.7
@@ -8,3 +7,4 @@ sudo alternatives --set python /usr/bin/python2.7
 sudo easy_install --upgrade pip
 sudo `which pip` install boto3
 sudo `which pip` install awscli
+
