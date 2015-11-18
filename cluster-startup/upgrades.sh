@@ -1,6 +1,5 @@
 #!/bin/bash
-
-yum upgrade
+sudo yum upgrade
 
 # switch to python 2.7.9
 sudo alternatives --set python /usr/bin/python2.7

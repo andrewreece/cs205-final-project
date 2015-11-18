@@ -9,15 +9,23 @@ EC2_KEY_NAME   = 'cs205'
 RELEASE_LABEL  = '4.1.0'
 HADOOP_VERSION = '2.6.0'
 SPARK_VERSION  = '1.5.0'
-INSTANCE_TYPE  = "m1.small"
-LOWEST_BID	   = 0.03 # minimum spot price bid
+INSTANCE_TYPE  = "m1.medium"
+LOWEST_BID	   = 0.02 # minimum spot price bid
 
 max_results = 10
 start_time  = datetime.now() - timedelta(hours=1)
 
-# NOTE: If you want to have different instance types running at different levels of your cluster,
-# 		you'll need to build in calculation of multiple spot averages.  
-#		(Just add to the list of instance types and divvy up the math accordingly)
+''' IMPORTANT NOTES ABOUT YOUR CONFIGURATION: 
+
+	- As of 18 NOV you have master and core nodes running on spot pricing. 
+	  Change this so that at least master is on-demand when you go live.
+
+	- All nodes are of type "m1.medium" as of 18 NOV.
+
+	- If you want to have different instance types running at different levels of your cluster,
+ 		you'll need to build in calculation of multiple spot averages.  
+		(Just add to the list of instance types and divvy up the math accordingly)
+'''
 
 spots = ec2client.describe_spot_price_history(InstanceTypes=[INSTANCE_TYPE], StartTime=start_time, MaxResults=max_results)
 zones = ['us-east-'+z for z in ['1a','1b','1c','1d','1e']]
@@ -65,12 +73,40 @@ instance_count = sum([x['InstanceCount'] for x in instance_groups])
 
 bootstraps = [
 				{
-				  'Name':'Install Kafka',
+				  'Name':'Upgrade yum, python, pip, and install boto3, awscli',
 				  'ScriptBootstrapActionPath': {
-				  		'Path'='s3://support.elasticmapreduce/bootstrap-actions/other/kafka_install.rb'
+				  		'Path'='s3://cs205-final-project/setup/startup/upgrades.sh'
 				  }
-				}
+				},
+				{
+				  'Name':'Install zookeeper, start instance',
+				  'ScriptBootstrapActionPath': {
+				  		'Path'='s3://cs205-final-project/setup/startup/zookeeper.sh'
+				  }
+				},
+				{
+				  'Name':'Install kafka, start instance',
+				  'ScriptBootstrapActionPath': {
+				  		'Path'='s3://cs205-final-project/setup/startup/kafka.sh'
+				  }
+				}#,
+				#{
+				#  'Name':'Start Kafka topic "tweets"',
+				#  'ScriptBootstrapActionPath': {
+				#  		'Path'='s3://cs205-final-project/setup/startup/kafka-topic.sh'
+				#  }
+				#}
 			 ]
+
+steps = [
+	        {
+	            'Name': 'Start Kafka topic "tweets"',
+	            'ActionOnFailure': 'TERMINATE_CLUSTER',
+	            'HadoopJarStep': {
+	                'Jar': 's3://cs205-final-project/setup/startup/kafka-topic.sh'
+	            }
+	        }
+		]
 
 response = emrclient.run_job_flow(
 									Name='agr-test-cluster',
@@ -91,7 +127,8 @@ response = emrclient.run_job_flow(
 											   },
 									Applications=apps,
 									VisibleToAllUsers=True,
-									BootstrapActions=bootstraps
+									BootstrapActions=bootstraps,
+									Steps=steps
 								 )
 
 cluster_id = response['JobFlowId']
