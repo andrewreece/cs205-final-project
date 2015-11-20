@@ -3,6 +3,7 @@
 #Run only on master
 if sudo grep isMaster /mnt/var/lib/info/instance.json | sudo grep true;
 then
+cd /home/hadoop/
 KAFKAV=kafka_2.10-0.8.2.0
 #install kafka
 sudo wget http://apache.go-parts.com/kafka/0.8.2.0/$KAFKAV.tgz
