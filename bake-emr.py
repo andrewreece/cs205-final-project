@@ -6,12 +6,13 @@ from collections import OrderedDict
 ec2client = boto3.client('ec2')
 emrclient = boto3.client('emr')
 
+JOB_NAME 	   = 'testing spark modules and kafka host'
 EC2_KEY_NAME   = 'cs205'
 RELEASE_LABEL  = 'emr-4.1.0'
 HADOOP_VERSION = '2.6.0'
 #SPARK_VERSION  = '1.5.0'
 INSTANCE_TYPES  = OrderedDict() # ordered so we can get master zone first
-INSTANCE_TYPES['MASTER'] = "m1.xlarge"
+INSTANCE_TYPES['MASTER'] = "m1.large"
 INSTANCE_TYPES['CORE'] = "m1.medium"
 LOWEST_BID	   = 0.02 # minimum spot price bid
 
@@ -22,12 +23,6 @@ start_time  = datetime.now() - timedelta(hours=1)
 
 	- As of 18 NOV you have master and core nodes running on spot pricing. 
 	  Change this so that at least master is on-demand when you go live.
-
-	- All nodes are of type "m1.medium" as of 18 NOV.
-
-	- If you want to have different instance types running at different levels of your cluster,
- 		you'll need to build in calculation of multiple spot averages.  
-		(Just add to the list of instance types and divvy up the math accordingly)
 '''
 
 spots = ec2client.describe_spot_price_history(InstanceTypes=INSTANCE_TYPES.values(), StartTime=start_time, MaxResults=max_results)
@@ -128,26 +123,26 @@ bootstraps = [
 
 steps = [
 	        {
-	            'Name': 'Start Kafka server',
+	            'Name': 'Start Kafka server, topic, and run twitter-in.py',
 	            'ActionOnFailure': 'TERMINATE_CLUSTER',
 	            'HadoopJarStep': {
 	                'Jar': 'command-runner.jar',
 	                'Args':['/home/hadoop/startup/kafka-start.sh']
 	            }
 	        },
-	        {
-	            'Name': 'Start Kafka topic "tweets"',
-	            'ActionOnFailure': 'TERMINATE_CLUSTER',
-	            'HadoopJarStep': {
-	                'Jar': 'command-runner.jar',
-	                'Args':['/home/hadoop/startup/kafka-topic.sh']
-	            }
-	        }
+	        #{
+	        #    'Name': 'Start Kafka topic "tweets"',
+	        #    'ActionOnFailure': 'TERMINATE_CLUSTER',
+	        #    'HadoopJarStep': {
+	        #        'Jar': 'command-runner.jar',
+	        #        'Args':['/home/hadoop/startup/kafka-topic.sh']
+	        #    }
+	        #}
 		]
 
 
 response = emrclient.run_job_flow(
-									Name='no sudo',
+									Name=JOB_NAME,
 									LogUri='s3://cs205-final-project/logs/emr/',
 									ReleaseLabel=RELEASE_LABEL,
 									Instances={
