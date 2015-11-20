@@ -112,12 +112,12 @@ bootstraps = [
 				  		'Path':'s3://cs205-final-project/setup/startup/kafka.sh'
 				  }
 				},
-				{
-				  'Name':'Start Kafka server',
-				  'ScriptBootstrapAction': {
-				  		'Path':'s3://cs205-final-project/setup/startup/kafka-start.sh'
-				  }
-				},
+				#{
+				#  'Name':'Start Kafka server',
+				#  'ScriptBootstrapAction': {
+				#  		'Path':'s3://cs205-final-project/setup/startup/kafka-start.sh'
+				#  }
+				#},
 				#{
 				#  'Name':'Start Kafka topic "tweets"',
 				#  'ScriptBootstrapAction': {
@@ -127,25 +127,27 @@ bootstraps = [
 			 ]
 
 steps = [
-	        #{
-	        #    'Name': 'Start Kafka server',
-	        #    'ActionOnFailure': 'TERMINATE_CLUSTER',
-	        #    'HadoopJarStep': {
-	        #        'Jar': 's3://cs205-final-project/setup/startup/kafka-start.sh'
-	        #    }
-	        #},
+	        {
+	            'Name': 'Start Kafka server',
+	            'ActionOnFailure': 'TERMINATE_CLUSTER',
+	            'HadoopJarStep': {
+	                'Jar': 'command-runner.jar',
+	                'Args':['/home/hadoop/startup/kafka-start.sh']
+	            }
+	        },
 	        {
 	            'Name': 'Start Kafka topic "tweets"',
 	            'ActionOnFailure': 'TERMINATE_CLUSTER',
 	            'HadoopJarStep': {
-	                'Jar': '/home/hadoop/startup/kafka-topic.sh'
+	                'Jar': 'command-runner.jar',
+	                'Args':['/home/hadoop/startup/kafka-topic.sh']
 	            }
 	        }
 		]
 
 
 response = emrclient.run_job_flow(
-									Name='agr-test-cluster',
+									Name='no sudo',
 									LogUri='s3://cs205-final-project/logs/emr/',
 									ReleaseLabel=RELEASE_LABEL,
 									Instances={

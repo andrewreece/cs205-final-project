@@ -12,4 +12,7 @@ mkdir /home/hadoop/startup
 
 aws s3 cp s3://cs205-final-project/setup/kafka/spark-streaming-kafka-assembly_2.10-1.5.2.jar /home/hadoop/
 aws s3 cp s3://cs205-final-project/scripts /home/hadoop/scripts/ --recursive
-aws s3 cp s3://cs205-final-project/setup/startup/kafka-start.sh /home/hadoop/startup/
+aws s3 cp s3://cs205-final-project/setup/startup/ /home/hadoop/startup/ --recursive
+
+sudo chmod 777 /home/hadoop/startup/kafka-start.sh
+sudo chmod 777 /home/hadoop/startup/kafka-topic.sh
