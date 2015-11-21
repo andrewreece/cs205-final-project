@@ -124,13 +124,13 @@ def find_best_spot_price(ec2,itypes,lowest_bid=0.02,hours_back=1,max_results=20)
 					best['MASTER']['zone'] = zone
 					best['CORE']['zone'] = zone
 					best[ilevel]['price'] = round(avgp,3)
-					best[ilevel]['bid'] = round(best[ilevel]['price']*1.2,3) if best[ilevel]['price']*1.2 >= LOWEST_BID else LOWEST_BID
+					best[ilevel]['bid'] = round(best[ilevel]['price']*1.2,3) if best[ilevel]['price']*1.2 >= lowest_bid else lowest_bid
 			print "Best bid for {} ({}) = {}: {}".format(ilevel,itype,best[ilevel]['zone'],best[ilevel]['bid'])
 		else:
 			prices = [float(x['SpotPrice']) for x in spots['SpotPriceHistory'] if x['AvailabilityZone']==best['MASTER']['zone'] and x['InstanceType'] == itype]
 			avgp = np.mean(prices)
 			best[ilevel]['price'] = round(avgp,3)
-			best[ilevel]['bid'] = round(best[ilevel]['price']*1.2,3) if best[ilevel]['price']*1.2 >= LOWEST_BID else LOWEST_BID
+			best[ilevel]['bid'] = round(best[ilevel]['price']*1.2,3) if best[ilevel]['price']*1.2 >= lowest_bid else lowest_bid
 			print "Best bid for {} ({}) = {}: {}".format(ilevel,itype,best[ilevel]['zone'],best[ilevel]['bid'])
 	return best 
 
@@ -138,7 +138,7 @@ best = find_best_spot_price(ec2client,INSTANCE_TYPES)
 
 # software to load as part of AWS Release package
 app_names = ['spark','hadoop']
-apps = [dict(name=appname) for appname in app_names]
+apps = [dict(Name=appname) for appname in app_names]
 
 # define instance groups
 instance_groups = 	[

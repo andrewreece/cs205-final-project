@@ -1,14 +1,43 @@
-import findspark
-findspark.init()
-import pyspark
+import time, datetime, json, boto3
 
+#import findspark
+#findspark.init()
+import pyspark
 from pyspark.streaming import StreamingContext
 from pyspark.streaming.kafka import KafkaUtils
 
-import time, datetime, json
+BATCH_DURATION = 5
 
+client = boto3.client('emr')
+clusters = client.list_clusters(ClusterStates=['RUNNING','WAITING','BOOTSTRAPPING'])['Clusters']
 
+if len(clusters) > 0:
+	cid = clusters[0]['Id']
+	master_instance = client.list_instances(ClusterId=cid,InstanceGroupTypes=['MASTER'])
+	master_ip = master_instance['Instances'][0]['PrivateIpAddress']
+	kafka_host = master_ip + ':' + '9092'
+	search_terms_fname = '/home/hadoop/scripts/search-terms.txt'
 
+	from pyspark.streaming import StreamingContext
+	from pyspark.streaming.kafka import KafkaUtils
+	sc = pyspark.SparkContext()
+	ssc = StreamingContext(sc, BATCH_DURATION) # second arg is num seconds per DStream-RDD
+
+else:
+	kafka_host = 'localhost:9092'
+	search_terms_fname = '/Users/andrew/git-local/search-terms.txt'
+
+	import findspark
+	findspark.init()
+	import pyspark
+	from pyspark.streaming import StreamingContext
+	from pyspark.streaming.kafka import KafkaUtils
+
+	#start spark streaming context with sc
+	#note: you need to create sc if you're not running the ispark setup in ipython notebook
+	sc = pyspark.SparkContext()
+	ssc = StreamingContext(sc, BATCH_DURATION) # second arg is num seconds per DStream-RDD
+	
 
 
 def make_json(ix):
@@ -37,19 +66,6 @@ def get_relevant_fields(_):
 						}
 					)
 
-def create_db_conn():
-	import boto.sdb
-	conn = boto.sdb.connect_to_region(
-					'us-east-1',
-					aws_access_key_id='AKIAJIDIX4MKTPI4Y27A',
-					aws_secret_access_key='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')
-	return conn
-
-def get_table(c,tname):
-	import boto.sdb
-	table = c.get_domain(tname)
-	return table
-
 def write_to_db(iterator):
 	import boto.sdb
 	table_name="test"
@@ -66,12 +82,13 @@ def write_to_db(iterator):
 #items = {'item1':{'attr1':'val1'},'item2':{'attr2':'val2'}}
 #dstream.foreachRDD(lambda rdd: rdd.foreachPartition(sendPartition))
 
-#start spark streaming context with sc
-#note: you need to create sc if you're not running the ispark setup in ipython notebook
-sc = pyspark.SparkContext()
-ssc = StreamingContext(sc, 5)
+
+
+
+host_port = kafka_host # this is set in Kafka server config, make sure it is the same!
+
 # create kafka streaming context
-kstream = KafkaUtils.createDirectStream(ssc, ["tweets"], {"bootstrap.servers": "localhost:9092"})
+kstream = KafkaUtils.createDirectStream(ssc, ["tweets"], {"bootstrap.servers": host_port})
 
 year   = time.localtime().tm_year
 month  = time.localtime().tm_mon
@@ -88,8 +105,8 @@ kstream .map(make_json(1))
 		#.pprint()
 		.filter(filter_tweets(1))
 		.map(get_relevant_fields(1))
-		#.pprint()
-		.foreachRDD(lambda rdd: rdd.foreachPartition(write_to_db))
+		.pprint()
+		#.foreachRDD(lambda rdd: rdd.foreachPartition(write_to_db))
 		#.pprint()
 		#.saveAsTextFiles("tw","json")
 )
