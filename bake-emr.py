@@ -69,11 +69,11 @@ from collections import OrderedDict
 ec2client = boto3.client('ec2')
 emrclient = boto3.client('emr')
 
-EC2_KEY_NAME   = 'cs205' 				# SSH key name
-RELEASE_LABEL  = 'emr-4.1.0'			# AWS Release (replaces AMI version)
+EC2_KEY_NAME   = 'cs205' 		# SSH key name
+RELEASE_LABEL  = 'emr-4.1.0'		# AWS Release (replaces AMI version)
 HADOOP_VERSION = '2.6.0'	
-#SPARK_VERSION  = '1.5.0'				# Spark version is defined by Release version
-INSTANCE_TYPES  = OrderedDict() 		# Use ordered dict to get master zone first (see below)
+#SPARK_VERSION  = '1.5.0'		# Spark version is defined by Release version
+INSTANCE_TYPES  = OrderedDict() 	# Use ordered dict to get master zone first (see below)
 INSTANCE_TYPES['MASTER'] = "m1.large"	# Master node instance type
 INSTANCE_TYPES['CORE'] = "m1.medium"	# Core node instance type
 #INSTANCE_TYPES['TASK'] = "m1.small"	# Task node instance type
