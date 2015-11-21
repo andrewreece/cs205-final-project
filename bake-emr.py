@@ -225,26 +225,26 @@ steps = [
 
 JOB_NAME = 'run twitter-in, all kafka setup in bootstrap'
 response = emrclient.run_job_flow(
-									Name=JOB_NAME,
-									LogUri='s3://cs205-final-project/logs/emr/',
-									ReleaseLabel=RELEASE_LABEL,
-									Instances={
-												'InstanceGroups':instance_groups,
-												'Ec2KeyName':EC2_KEY_NAME,
-												'Placement': { 'AvailabilityZone': best['MASTER']['zone'] },
-												'KeepJobFlowAliveWhenNoSteps':True,
-												'TerminationProtected':False,
-												'HadoopVersion':HADOOP_VERSION,
-												'EmrManagedMasterSecurityGroup':'sg-d33b7cb8', #GroupName=ElasticMapReduce-master
-												'EmrManagedSlaveSecurityGroup':'sg-d13b7cba', #GroupName=ElasticMapReduce-slave
-											   },
-									Applications=apps,
-									BootstrapActions=bootstraps,
-									VisibleToAllUsers=True,
-									JobFlowRole="EMR_EC2_DefaultRole",
-									ServiceRole="EMR_DefaultRole",
-									Steps=steps
-								 )
+			Name=JOB_NAME,
+			LogUri='s3://cs205-final-project/logs/emr/',
+			ReleaseLabel=RELEASE_LABEL,
+			Instances={
+						'InstanceGroups':instance_groups,
+						'Ec2KeyName':EC2_KEY_NAME,
+						'Placement': { 'AvailabilityZone': best['MASTER']['zone'] },
+						'KeepJobFlowAliveWhenNoSteps':True,
+						'TerminationProtected':False,
+						'HadoopVersion':HADOOP_VERSION,
+						'EmrManagedMasterSecurityGroup':'sg-d33b7cb8', #GroupName=ElasticMapReduce-master
+						'EmrManagedSlaveSecurityGroup':'sg-d13b7cba', #GroupName=ElasticMapReduce-slave
+					   },
+			Applications=apps,
+			BootstrapActions=bootstraps,
+			VisibleToAllUsers=True,
+			JobFlowRole="EMR_EC2_DefaultRole",
+			ServiceRole="EMR_DefaultRole",
+			Steps=steps
+		 )
 
 cluster_id = response['JobFlowId']
 
