@@ -106,13 +106,13 @@ def find_best_spot_price(ec2,itypes,lowest_bid=0.02,hours_back=1,max_results=20)
 	zones = ['us-east-'+z for z in ['1a','1b','1c','1d','1e']]
 	best  = {
 			  'MASTER':
-						{	'zone':'',
-							'price':np.inf
-						},
+				{	'zone':'',
+					'price':np.inf
+				},
 			  'CORE':
-						{	'zone':'',
-							'price':np.inf
-						}
+				{	'zone':'',
+					'price':np.inf
+				}
 			}
 
 	for ilevel,itype in itypes.items():
@@ -142,22 +142,22 @@ apps = [dict(Name=appname) for appname in app_names]
 
 # define instance groups
 instance_groups = 	[
-						{	# master
-					    	'InstanceCount':1,
-					    	'InstanceRole':"MASTER",
-					    	'InstanceType':INSTANCE_TYPES['MASTER'],
-					    	'Market':"SPOT",
-					    	'BidPrice':str(best['MASTER']['bid']),
-					    	'Name':"Spot Main node"
-					    },
-						{	# core
-					    	'InstanceCount':2,
-					    	'InstanceRole':"CORE",
-					    	'InstanceType':INSTANCE_TYPES['CORE'],
-					    	'Market':"SPOT",
-					    	'BidPrice':str(best['CORE']['bid']),
-					    	'Name':"Spot Worker node"
-					    },
+				{	# master
+			    	'InstanceCount':1,
+			    	'InstanceRole':"MASTER",
+			    	'InstanceType':INSTANCE_TYPES['MASTER'],
+			    	'Market':"SPOT",
+			    	'BidPrice':str(best['MASTER']['bid']),
+			    	'Name':"Spot Main node"
+			    },
+				{	# core
+			    	'InstanceCount':2,
+			    	'InstanceRole':"CORE",
+			    	'InstanceType':INSTANCE_TYPES['CORE'],
+			    	'Market':"SPOT",
+			    	'BidPrice':str(best['CORE']['bid']),
+			    	'Name':"Spot Worker node"
+			    },
 					]
 
 instance_count = sum([x['InstanceCount'] for x in instance_groups])
