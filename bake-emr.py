@@ -105,15 +105,15 @@ def find_best_spot_price(ec2,itypes,lowest_bid=0.02,hours_back=1,max_results=20)
 	spots = ec2.describe_spot_price_history(InstanceTypes=itypes.values(), StartTime=start_time, MaxResults=max_results)
 	zones = ['us-east-'+z for z in ['1a','1b','1c','1d','1e']]
 	best  = {
-			  'MASTER':
-				{'zone':'',
-				'price':np.inf
-				},
-			  'CORE':
-				{'zone':'',
-				'price':np.inf
-				}
+		  'MASTER':
+			{ 'zone':'',
+			  'price':np.inf
+			},
+		  'CORE':
+			{ 'zone':'',
+			  'price':np.inf
 			}
+		}
 
 	for ilevel,itype in itypes.items():
 		if ilevel == "MASTER":
