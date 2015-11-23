@@ -69,7 +69,7 @@ def get_relevant_fields(_):
 
 def write_to_db(iterator):
 	import boto3
-	table_name="test"
+	table_name="tweettest"
 	client = boto3.client('sdb', region_name='us-east-1')
 	for row in iterator:
 		k,v = row
