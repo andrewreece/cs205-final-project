@@ -1,9 +1,6 @@
 
 from kafka import SimpleProducer, KafkaClient
 
-import numpy as np
-import pandas as pd
-import re
 import requests
 from requests_oauthlib import OAuth1
 import urllib
@@ -11,9 +8,27 @@ import datetime
 import time
 import json
 import sys
+import boto3
 
+client = boto3.client('emr')
+clusters = client.list_clusters(ClusterStates=['RUNNING','WAITING','BOOTSTRAPPING'])['Clusters']
+print "clusters"
+print clusters 
+print "len clusters:",len(clusters)
+if len(clusters) > 0:
+	cid = clusters[0]['Id']
+	master_instance = client.list_instances(ClusterId=cid,InstanceGroupTypes=['MASTER'])
+	master_ip = master_instance['Instances'][0]['PrivateIpAddress']
+	kafka_host = master_ip + ':' + '9092'
+	search_terms_fname = '/home/hadoop/scripts/search-terms.txt'
+else:
+	kafka_host = 'localhost:9092'
+	search_terms_fname = '/Users/andrew/git-local/search-terms.txt'
 
-kafka = KafkaClient('localhost:9092')
+kafka_host = 'localhost:9092'
+search_terms_fname = '/Users/andrew/git-local/search-terms.txt'
+
+kafka = KafkaClient(kafka_host)
 producer = SimpleProducer(kafka)
 
 
@@ -29,8 +44,9 @@ config_token = OAuth1(APP_KEY,
 
 config_url = 'https://stream.twitter.com/1.1/statuses/filter.json'
 
-search_terms = np.loadtxt("/Users/andrew/git-local/search-terms.txt",delimiter="\n",dtype=object)
-search_terms = ','.join(search_terms)
+f = open(search_terms_fname,'r')
+search_terms = f.read().replace("\n",",")
+f.close()
 search_terms = urllib.urlencode({"track":search_terms}).split("=")[1]
 
 data      = [('language', 'en'), ('track', search_terms)]
@@ -44,23 +60,38 @@ year   = time.localtime().tm_year
 month  = time.localtime().tm_mon
 day    = time.localtime().tm_mday
 hour   = time.localtime().tm_hour
-minute = time.localtime().tm_min + 2
+minute = time.localtime().tm_min
+newmin = (minute + 2) % 60
+print "minute:",minute,"newmin:",newmin
+if newmin < minute:
+	hour = hour + 1
+	minute = newmin
+else:
+	minute += 2
 
 if response.status_code == 200:
 	print "Reponse Code = 200"
 	ct = 0
 	timesup = datetime.datetime(year,month,day,hour,minute).strftime('%s')
-
 	for line in response.iter_lines():  # Iterate over streaming tweets
 		if int(timesup) > time.time():
 			#print(line.decode('utf8'))
-			producer.send_messages('tweets', line)
+			try:
+				producer.send_messages('tweets', line)
+			except:
+				time.sleep(1)
+				producer.send_messages('tweets', line)
 			ct+=1
 		else:
 			break
 else:
 	print("ERROR Response code:{}".format(response.status_code))
-	producer.send_messages('tweets', "ERROR Response code:{}".format(response.status_code))
+	try:
+		producer.send_messages('tweets', "ERROR Response code:{}".format(response.status_code))
+	except: 
+		time.sleep(1)
+		producer.send_messages('tweets', "ERROR Response code:{}".format(response.status_code))
+print "END twitter-in.py"
 response.close()
 
 	

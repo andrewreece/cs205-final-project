@@ -1,15 +1,45 @@
-import findspark
-findspark.init()
-import pyspark
+import time, datetime, json, boto3
 
-from pyspark.streaming import StreamingContext
-from pyspark.streaming.kafka import KafkaUtils
+BATCH_DURATION = 5
 
-import time, datetime, json
+client = boto3.client('emr')
+
+# this is a little shaky, as there may be >1 clusters running in production
+# maybe better to search by cluster name as well?
+clusters = client.list_clusters(ClusterStates=['RUNNING','WAITING','BOOTSTRAPPING'])['Clusters']
+
+if len(clusters) > 0:
+	import pyspark
+	from pyspark.streaming import StreamingContext
+	from pyspark.streaming.kafka import KafkaUtils
+
+	cid 			= clusters[0]['Id']
+	master_instance = client.list_instances(ClusterId=cid,InstanceGroupTypes=['MASTER'])
+	master_ip 		= master_instance['Instances'][0]['PrivateIpAddress']
+	kafka_host 		= master_ip + ':' + '9092'
+
+	sc = pyspark.SparkContext()
+	ssc = StreamingContext(sc, BATCH_DURATION) # second arg is num seconds per DStream-RDD
+
+else:
+	import findspark
+	findspark.init()
+	import pyspark
+	from pyspark.streaming import StreamingContext
+	from pyspark.streaming.kafka import KafkaUtils
+
+	kafka_host 	= 'localhost:9092'
+
+	#start spark streaming context with sc
+	#note: you need to create sc if you're not running the ispark setup in ipython notebook
+	sc = pyspark.SparkContext()
+	ssc = StreamingContext(sc, BATCH_DURATION) # second arg is num seconds per DStream-RDD
 
 
-
-
+#start spark streaming context with sc
+#note: you need to create sc if you're not running the ispark setup in ipython notebook
+#sc = pyspark.SparkContext()
+#ssc = StreamingContext(sc, BATCH_DURATION) # second arg is num seconds per DStream-RDD
 
 def make_json(ix):
 	try:
@@ -37,47 +67,48 @@ def get_relevant_fields(_):
 						}
 					)
 
-def create_db_conn():
-	import boto.sdb
-	conn = boto.sdb.connect_to_region(
-					'us-east-1',
-					aws_access_key_id='AKIAJIDIX4MKTPI4Y27A',
-					aws_secret_access_key='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')
-	return conn
-
-def get_table(c,tname):
-	import boto.sdb
-	table = c.get_domain(tname)
-	return table
-
 def write_to_db(iterator):
-	import boto.sdb
+	import boto3
 	table_name="test"
-	conn = boto.sdb.connect_to_region(
-					'us-east-1',
-					aws_access_key_id='AKIAJIDIX4MKTPI4Y27A',
-					aws_secret_access_key='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')
-	table = conn.get_domain(table_name)
+	client = boto3.client('sdb', region_name='us-east-1')
 	for row in iterator:
 		k,v = row
-		table.put_attributes(k,v) # make sure this handles multiple records per insert
+		attrs = []
+		try:
+			for k2,v2 in v.items():
+				if isinstance(v2,list):
+					v2 = ','.join([val for val in v2]) if len(v2)>0 else ''
+				elif v2 is None:
+					v2 = ''
+				# mytext = u'<some string containing 4-byte chars>'
+				v2 = v2.encode('utf8').decode('ascii','ignore')
+				attrs.append( {'Name':k2,'Value':v2,'Replace':True} )
+		except Exception, e:
+			print str(e)
+			print v 
+		try:
+			client.put_attributes(
+				DomainName=	table_name,
+				ItemName  =	str(k),
+				Attributes=	attrs 
+			) 
+		except Exception, e:
+			print str(e)
+			print attrs
+			print
 
-#example code:
-#items = {'item1':{'attr1':'val1'},'item2':{'attr2':'val2'}}
-#dstream.foreachRDD(lambda rdd: rdd.foreachPartition(sendPartition))
-
-#start spark streaming context with sc
-#note: you need to create sc if you're not running the ispark setup in ipython notebook
-sc = pyspark.SparkContext()
-ssc = StreamingContext(sc, 5)
 # create kafka streaming context
-kstream = KafkaUtils.createDirectStream(ssc, ["tweets"], {"bootstrap.servers": "localhost:9092"})
+kstream = KafkaUtils.createDirectStream(ssc, ["tweets"], {"bootstrap.servers": kafka_host})
 
 year   = time.localtime().tm_year
 month  = time.localtime().tm_mon
 day    = time.localtime().tm_mday
 hour   = time.localtime().tm_hour
-minute = time.localtime().tm_min + 2
+minute = time.localtime().tm_min
+newmin = (minute + 2) % 60
+if newmin < minute:
+	hour = hour + 1
+	minute = newmin
 
 #timesup = datetime.datetime(year,month,day,hour,minute).strftime('%s')
 
@@ -96,6 +127,3 @@ kstream .map(make_json(1))
 ssc.start()
 ssc.awaitTermination()
 
-print
-print "finished"
-print

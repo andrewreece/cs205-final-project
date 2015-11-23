@@ -5,3 +5,11 @@
 	font-family:consolas;
 	border: solid 2px green;
 }
+
+#bake-report {
+	width:400px,
+	display:block;
+	height:200px;
+	font-family:consolas;
+	border: solid 2px red;
+}
