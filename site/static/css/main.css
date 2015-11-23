@@ -1,7 +1,23 @@
+input {
+	-webkit-appearance: button;
+	font-size:14pt;
+}
+
 #tweet {
 	width:500px,
 	display:block;
 	height:300px;
 	font-family:consolas;
-	border: solid 2px green;
+	border: solid 2px steelblue;
+	background-color: lightgray;
+	overflow: scroll;
+}
+
+#bake-report {
+	width:400px,
+	display:block;
+	height:200px;
+	font-family:consolas;
+	border: solid 2px red;
+	overflow:scroll;
 }
