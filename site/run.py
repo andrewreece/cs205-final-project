@@ -7,6 +7,7 @@ import numpy as np
 import time
 import boto3
 import baker
+from nocache import nocache
 
 
 ## the core flask app
@@ -29,6 +30,7 @@ def bake():
 		return str(e)
 
 @app.route('/pull/<table_name>')
+@nocache
 def pull(table_name):
 	try:
 		client = boto3.client('sdb')
@@ -36,9 +38,12 @@ def pull(table_name):
 		output = {}
 		query = "select * from {}".format(table_name)
 		response = paginator.paginate( SelectExpression=query, ConsistentRead=True )
+		ct = 0
 		for r in response:
 			for i,row in enumerate(r['Items']):
+				ct+=1
 				output[str(row['Name'])] = row['Attributes']
+		#output["count"] = ct 
 		return jsonify(output)
 	except Exception, e:
 		return str(e)+'error'
@@ -55,8 +60,8 @@ def check_cluster_status(cid):
 		if cluster is not None:
 
 			cstatus = cluster['Status']['State']
-			cname   = cluster['Name']
-			return jsonify({"name":cname,"status":cstatus})
+			cname   = cluster['Id']
+			return jsonify({"id":cname,"status":cstatus})
 		else:
 			return "No active clusters found"
 	except Exception, e:
