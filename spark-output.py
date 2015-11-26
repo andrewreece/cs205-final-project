@@ -70,10 +70,10 @@ def filter_tweets(_):
 			* No tweets with links
 				- We need to check both entities and media fields for this (is that true?)
 	'''
-	return lambda t: (('retweeted_status' not in t.keys()) 						and 
+	return lambda t: (('retweeted_status' not in t.keys()) 						  and 
 					  ((t['geo'] is not None) or (t['user']['location'] is not None)) and
-					  (t['user']['lang']=='en') 				and
-					  (len(t['entities']['urls'])==0) 			and
+					  (t['user']['lang']=='en') 					and
+					  (len(t['entities']['urls'])==0) 				and
 					  ('media' not in t['entities'].keys())
 					  )
 
