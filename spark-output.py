@@ -171,6 +171,8 @@ def set_end_time(minutes_forward=2):
 	if newmin < minute:
 		hour = hour + 1
 		minute = newmin
+	else:
+		minute += 2
 
 	return {"year":year,"month":month,"day":day,"hour":hour,"minute":minute}
 

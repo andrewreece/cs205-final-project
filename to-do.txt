@@ -8,3 +8,8 @@ figure out this lambda thing with spark map(). it doesn't look like you need to 
 do we really want to ignore tweets with no geolocation or location field?
 
 make sure that adding an extra parameter along with iterator doesn't break write_to_db in spark-output.py. 
+
+move twitter api creds to s3 file and read into twitter-in.py (they're currently posted directly in the script)
+
+make sure all your functions still work, in particular main.js, twitter-in and spark-out.
+you didn't just comment on your travel day, but you helpfully consolidated things and made them more efficient.  but you were also jet-lagged.  so.
