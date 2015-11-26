@@ -1,0 +1,10 @@
+CS205 TO-DO NOV 26:
+
+do more testing on make_json in spark-output.py, this seems to be where the error is that keeps showing up in your spark feed, about "No JSON could be found", something like that.
+
+figure out this lambda thing with spark map(). it doesn't look like you need to have everything always in this 'return lambda' formula, and it may be unnecessarily complicated syntax. 
+	look at filter_tweets and get_relevant_fields in spark-output.py for examples of this
+	
+do we really want to ignore tweets with no geolocation or location field?
+
+make sure that adding an extra parameter along with iterator doesn't break write_to_db in spark-output.py. 
