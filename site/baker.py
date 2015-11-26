@@ -86,20 +86,30 @@ def bake_emr():
 	'''
 
 
+	def get_bid_details(best,level,spots,itypes,zone,lowest_bid=0.02):
+		prices = [float(x['SpotPrice']) for x in spots['SpotPriceHistory'] if x['AvailabilityZone']==zone and x['InstanceType'] == itypes[level]]
+		avg_price = round(np.mean(prices),3) if len(prices) else np.inf 
+		proposed_bid = round(best[level]['price']*1.2,3)
+		if proposed_bid < lowest_bid:
+			proposed_bid = lowest_bid
+		return zone, avg_price, proposed_bid
+
 	def find_best_spot_price(ec2,itypes,lowest_bid=0.02,hours_back=1,max_results=20):
 		''' Determines best spot price for given instance types in cluster.
 
 			How it works:
-				- Determine how far back in time to look to collect average price. Set by hours_back, default 1hr.
-				- Get N=max_results spot prices with describe_spot_price_history
-				- Initialize best dict, with keys for each instance type
-				- Loop over possible zones in us-east-1 and find the best average price in each one 
-				- We do this with the master node first, because the entire cluster has to be in one zone.
-					(Since the master node will likely be the most expensive, we choose the zone based on its best price.
-					 Note that we could also argue that the greatest price could be incurred by a large number of workers,
-					 so if you end up with a lot of CORE or TASK nodes, it might be best to change this logic.)
-				- Determine best average price for each node type in the best zone 
-				- Compute our spot price bid per instance at 1.2x of the best average price
+				1. Determine how far back in time to look to collect average price. Set by hours_back, default 1hr.
+				2. Get N=max_results spot prices with describe_spot_price_history
+				3. Initialize best dict, with keys for each instance type
+				4. Loop over possible zones in us-east-1 and find the best average price in each one 
+					- We do this with the master node first, because the entire cluster has to be in one zone.
+						(Since the master node will likely be the most expensive, we choose the zone based on its best price.
+						 Note that we could also argue that the greatest price could be incurred by a large number of workers,
+						 so if you end up with a lot of CORE or TASK nodes, it might be best to change this logic.)
+					- Determine best average price for each node type in the best zone 
+					- Most of this work is done by the helper function get_big_details() 
+				5. Compute our spot price bid per instance at 1.2x of the best average price
+
 		'''
 		start_time  = datetime.now() - timedelta(hours=hours_back)
 
@@ -116,23 +126,24 @@ def bake_emr():
 					}
 			}
 
-		for ilevel,itype in itypes.items():
-			if ilevel == "MASTER":
-				for zone in zones:
-					prices = [float(x['SpotPrice']) for x in spots['SpotPriceHistory'] if x['AvailabilityZone']==zone and x['InstanceType'] == itype]
-					avgp = np.mean(prices) if len(prices) else np.inf
-					if avgp < best[ilevel]['price']:
-						best['MASTER']['zone'] = zone
-						best['CORE']['zone'] = zone
-						best[ilevel]['price'] = round(avgp,3)
-						best[ilevel]['bid'] = round(best[ilevel]['price']*1.2,3) if best[ilevel]['price']*1.2 >= lowest_bid else lowest_bid
-				print "Best bid for {} ({}) = {}: {}".format(ilevel,itype,best[ilevel]['zone'],best[ilevel]['bid'])
-			else:
-				prices = [float(x['SpotPrice']) for x in spots['SpotPriceHistory'] if x['AvailabilityZone']==best['MASTER']['zone'] and x['InstanceType'] == itype]
-				avgp = np.mean(prices)
-				best[ilevel]['price'] = round(avgp,3)
-				best[ilevel]['bid'] = round(best[ilevel]['price']*1.2,3) if best[ilevel]['price']*1.2 >= lowest_bid else lowest_bid
-				print "Best bid for {} ({}) = {}: {}".format(ilevel,itype,best[ilevel]['zone'],best[ilevel]['bid'])
+
+		for zone in zones:
+			new_zone, avgp, new_bid = get_bid_details(best, 'MASTER', spots, INSTANCE_TYPES, zone)
+
+			if avgp < best['MASTER']['price']:
+				best['MASTER']['zone'] = zone
+				best['MASTER']['price'] = avgp
+				best['MASTER']['bid'] = new_bid
+
+		print "Best bid for MASTER ({}) = {}: {}".format(INSTANCE_TYPES['MASTER'],best["MASTER"]['zone'],best["MASTER"]['bid'])
+		
+		best['CORE']['zone'] = best['MASTER']['zone']
+		_, avgp, new_bid = get_bid_details(best, 'CORE', spots, INSTANCE_TYPES, best['CORE']['zone'])
+		best['CORE']['price'] = avgp
+		best['CORE']['bid'] = new_bid
+
+		print "Best bid for CORE ({}) = {}: {}".format(INSTANCE_TYPES['CORE'],best['CORE']['zone'],best['CORE']['bid'])
+		
 		return best 
 
 	best = find_best_spot_price(ec2client,INSTANCE_TYPES)
@@ -161,8 +172,23 @@ def bake_emr():
 				    },
 				]
 
+	# how many nodes in total? (for now we use 3)
 	instance_count = sum([x['InstanceCount'] for x in instance_groups])
 
+	''' Bootstrap actions are carried out on all nodes in a cluster.  They're usually for software installs.
+		We have 4 bootstrap scripts, all load from s3: 
+			- install-basics
+				* this makes upgrades & installations to core python version and certain modules
+			- install-zookeeper
+				* installs zookeeper
+				* starts a zookeeper service on the master node 
+			- install-kafka
+				* installs kafka
+			- start-kafka-server
+				* starts a karfka server (no producers or consumer or topic yet)
+				* uses (&) notation (see process book for more) in order to make it run in the background
+				* if we don't run it in the background, it hangs the bootstrap process
+	'''
 	bootstraps = [
 			{
 			  'Name':'Upgrade yum, python, pip, and install/upgrade necessary modules',
@@ -187,15 +213,18 @@ def bake_emr():
 			  'ScriptBootstrapAction': {
 			  		'Path':'s3://cs205-final-project/scripts/start-kafka-server.sh'
 			  }
-			},
-			#{
-			#  'Name':'Start Kafka topic "tweets"',
-			#  'ScriptBootstrapAction': {
-			#  		'Path':'s3://cs205-final-project/setup/startup/kafka-topic.sh'
-			#  }
-			#}
+			}
 		]
 
+	''' Two jobs run after bootstrapping.
+		1. Start Kafka topic (currently named "tweets")
+			- See process book for more on topics, they're kind of like tables in a database.
+		2. Run actual data pipeline
+			- Opens Twitter->Kafka stream, then Spark ingests Kafka, does analysis, and writes to db.
+			- Two scripts inside run-main.sh: 
+				* twitter-in.py
+				* spark-output.py 
+	'''
 	steps = [
 		        {
 		            'Name': 'Start Kafka topic',
@@ -212,19 +241,17 @@ def bake_emr():
 		                'Jar': 'command-runner.jar',
 		                'Args':['/home/hadoop/scripts/run-main.sh']
 		            }
-		        },
-		        #{
-		        #    'Name': 'Run spark script',
-		        #    'ActionOnFailure': 'TERMINATE_CLUSTER',
-		        #    'HadoopJarStep': {
-		        #        'Jar': 'command-runner.jar',
-		        #        'Args':['spark-submit', '--jars', '/home/hadoop/spark-streaming-kafka-assembly_2.10-1.5.2.jar', '/home/hadoop/scripts/spark-output.py']
-		        #    }
-		        #}
+		        }
 			]
 
 
-	JOB_NAME = 'run twitter-in, all kafka setup in bootstrap'
+	JOB_NAME = 'andrew testing cluster' # This is the description AWS assigns to a cluster
+
+	''' Boto3 has an EMR client, the run_job_flow() method instantiates an EMR cluster.
+		Lots of configurations, see Boto3 docs for more.
+		NOTE: Both JobFlowRole and ServiceRole are necessary, even if they are only default roles.
+			  These roles need to be created with AWSCLI beforehand (I think they're actually files?)
+	'''
 	response = emrclient.run_job_flow(
 						Name=JOB_NAME,
 						LogUri='s3://cs205-final-project/logs/emr/',
@@ -249,12 +276,19 @@ def bake_emr():
 
 	cluster_id = response['JobFlowId']
 
-	#print "Starting cluster", cluster_id
-
 	status = emrclient.describe_cluster(ClusterId=cluster_id)
 	return status
 
-	#conn.terminate_jobflow(cluster_id)
-	#status = conn.describe_jobflow(cluster_id)
-	#print "Cluster status", status
-	#print "Cluster terminated"
+
+def terminate_emr(job_id):
+	''' Terminates EMR cluster with ID job_id 
+		* Cluster does not terminate immediately, but should go into termination process immediately.
+		* Check web console to be sure that termination has been initiated. (This code should work fine.)
+	'''
+	client = boto3.client('emr')
+	try:
+		client.terminate_job_flows(JobFlowIds=[jid])
+		return "Cluster terminating now."
+	except Exception, e:
+		return str(e)
+		
