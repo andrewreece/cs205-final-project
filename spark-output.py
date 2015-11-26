@@ -87,12 +87,12 @@ def get_relevant_fields(_):
 			* location (user-defined in profile, not necessarily current location)
 	'''
 	return lambda t:(t['id'], 
-					   {"timestamp":	t['created_at'],
-						"username":		t['user']['screen_name'],
-						"text":			t['text'],
-						"hashtags":		[el['text'] for el in t['entities']['hashtags']],
-						"geotag":		t['geo'],
-						"user_loc":		t['user']['location']
+					   {"timestamp": t['created_at'],
+						"username":	 t['user']['screen_name'],
+						"text":		 t['text'],
+						"hashtags":	 [el['text'] for el in t['entities']['hashtags']],
+						"geotag":	 t['geo'],
+						"user_loc":	 t['user']['location']
 						}
 					)
 
