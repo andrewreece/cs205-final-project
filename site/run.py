@@ -6,15 +6,15 @@ from collections import OrderedDict
 import numpy as np
 import time
 import boto3
-import baker
-from nocache import nocache
+import baker # this is a library we made with EMR baking functions
+from nocache import nocache # this is a library someone else made that keeps Flask from caching results
 
 
 ## the core flask app
 app = Flask(__name__)
 
 
-
+''' Load web interface index.html, using Jinja2 template '''
 @app.route("/")
 def template_index():
 	try:
@@ -22,6 +22,7 @@ def template_index():
 	except Exception, e:
 		return "Error:"+str(e)
 
+''' Spin up a new cluster '''
 @app.route("/bake")
 def bake():
 	try:
@@ -29,8 +30,17 @@ def bake():
 	except Exception, e:
 		return str(e)
 
+''' Terminate an existing cluster (needs cluster ID) '''
+@app.route("/terminate/<jobid>")
+def terminate(jobid):
+	try:
+		return baker.terminate_emr(jobid)
+	except Exception, e:
+		return str(e)
+
+''' Pulls down analysis output, stored in AWS SimpleDB table '''
 @app.route('/pull/<table_name>')
-@nocache
+@nocache # we need nocache, otherwise these results may cache in some browsers and ignore new data
 def pull(table_name):
 	try:
 		client = boto3.client('sdb')
@@ -48,17 +58,14 @@ def pull(table_name):
 	except Exception, e:
 		return str(e)+'error'
 
+''' Check current status of cluster (need cluster ID) '''
 @app.route('/checkcluster/<cid>')
 def check_cluster_status(cid):
 	try:
-		client = boto3.client('emr')
-
-		# this is a little shaky, as there may be >1 clusters running in production
-		# maybe better to search by cluster name as well?
+		client  = boto3.client('emr')
 		cluster = client.describe_cluster(ClusterId=str(cid))['Cluster']
 
 		if cluster is not None:
-
 			cstatus = cluster['Status']['State']
 			cname   = cluster['Id']
 			return jsonify({"id":cname,"status":cstatus})
@@ -66,14 +73,9 @@ def check_cluster_status(cid):
 			return "No active clusters found"
 	except Exception, e:
 		return str(e)
-## verify: verify that a user has followed us on instagram/twitter; if so, register them in 'usernames' table
-## we need the support_jsonp decorator to return JSONP format to Qualtrics - otherwise it throws a CORS error
-#@app.route('/verify/<medium>/<username>/<followed>/<unique_id>', methods = ['GET'])
-#@support_jsonp
-#def verify(medium, username, followed, unique_id):
 
 
-## run flask
+''' Run main Flask app '''
 if __name__ == '__main__':
 	app.run(host='127.0.0.1',port=12340, debug = True)
 

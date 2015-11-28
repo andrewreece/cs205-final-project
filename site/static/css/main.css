@@ -4,7 +4,7 @@ input {
 }
 
 #tweet {
-	width:500px,
+	width:500px;
 	display:block;
 	height:300px;
 	font-family:consolas;
@@ -14,10 +14,18 @@ input {
 }
 
 #bake-report {
-	width:400px,
+	width:400px;
 	display:block;
 	height:200px;
 	font-family:consolas;
 	border: solid 2px red;
 	overflow:scroll;
+}
+
+#terminate-report {
+	width:400px;
+	display:block;
+	height:80px;
+	font-family:consolas;
+	border: solid 2pm gray;
 }

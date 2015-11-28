@@ -10,24 +10,47 @@ import json
 import sys
 import boto3
 
+# kafka can have multiple ports if multiple producers, be careful
+kafka_port     = '9092'
+
 client = boto3.client('emr')
+
+''' list_clusters() is used here to find the current cluster ID
+	WARNING: this is a little shaky, as there may be >1 clusters running in production
+			 better to search by cluster name as well as state
+'''
 clusters = client.list_clusters(ClusterStates=['RUNNING','WAITING','BOOTSTRAPPING'])['Clusters']
-print "clusters"
-print clusters 
-print "len clusters:",len(clusters)
+
+''' We need to know if we're on an EMR cluster or a local machine.
+
+	- If we are on a cluster:
+		* We can't set 'localhost' for the kafka hostname, because other 
+	  	  nodes will have their own localhosts. 
+	 	* We can determine the private IP address of the master node (where Kafka runs), and
+	      use that instead of localhost.
+	    * We set the location for search-terms.txt on s3
+	- If we are on a local machine, no cluster:
+		* We set Kafka's hostname to localhost.
+		* We need to import findspark before loading pyspark.
+	    * We set the location for search-terms.txt in our local directory
+'''
 if len(clusters) > 0:
-	cid = clusters[0]['Id']
-	master_instance = client.list_instances(ClusterId=cid,InstanceGroupTypes=['MASTER'])
-	master_ip = master_instance['Instances'][0]['PrivateIpAddress']
-	kafka_host = master_ip + ':' + '9092'
+
+	cid 			   = clusters[0]['Id']
+	master_instance    = client.list_instances(ClusterId=cid,InstanceGroupTypes=['MASTER'])
+	hostname 		   = master_instance['Instances'][0]['PrivateIpAddress']
 	search_terms_fname = '/home/hadoop/scripts/search-terms.txt'
+
 else:
-	kafka_host = 'localhost:9092'
+
+	import findspark
+	findspark.init()
+	hostname           = 'localhost'
 	search_terms_fname = '/Users/andrew/git-local/search-terms.txt'
 
-kafka_host = 'localhost:9092'
-search_terms_fname = '/Users/andrew/git-local/search-terms.txt'
+kafka_host = ':'.join([hostname,kafka_port])
 
+	
 kafka = KafkaClient(kafka_host)
 producer = SimpleProducer(kafka)
 
@@ -47,32 +70,63 @@ config_url = 'https://stream.twitter.com/1.1/statuses/filter.json'
 f = open(search_terms_fname,'r')
 search_terms = f.read().replace("\n",",")
 f.close()
-search_terms = urllib.urlencode({"track":search_terms}).split("=")[1]
 
+# some search terms have apostrophes, maybe other chars? need to be url-encoded for query string
+search_terms = urllib.urlencode({"track":search_terms}).split("=")[1]
+# Query parameters to Twitter Stream API
 data      = [('language', 'en'), ('track', search_terms)]
 query_url = config_url + '?' + '&'.join([str(t[0]) + '=' + str(t[1]) for t in data])
+# Use stream=True switch on requests.get() to pull in stream indefinitely
 response  = requests.get(query_url, auth=config_token, stream=True)
 
 BATCH_INTERVAL = 60  # How frequently to update (seconds)
 BLOCKSIZE = 50  # How many tweets per update
 
-year   = time.localtime().tm_year
-month  = time.localtime().tm_mon
-day    = time.localtime().tm_mday
-hour   = time.localtime().tm_hour
-minute = time.localtime().tm_min
-newmin = (minute + 2) % 60
-print "minute:",minute,"newmin:",newmin
-if newmin < minute:
-	hour = hour + 1
-	minute = newmin
-else:
-	minute += 2
+def set_end_time(minutes_forward=2):
+	''' This function is only for initial test output. We'll probably delete it soon.
+		It defines the amount of minutes we keep the tweet stream open for ingestion.
+		In production this will be open-ended, or it will be set based on when the debate ends.
+	'''
+	year   = time.localtime().tm_year
+	month  = time.localtime().tm_mon
+	day    = time.localtime().tm_mday
+	hour   = time.localtime().tm_hour
+	minute = time.localtime().tm_min
+	newmin = (minute + minutes_forward) % 60 # if adding minutes_forward goes over 60 min, take remainder
+	if newmin < minute:
+		hour = hour + 1
+		minute = newmin
+	else:
+		minute += minutes_forward
 
+	return {"year":year,"month":month,"day":day,"hour":hour,"minute":minute}
+
+end_time = set_end_time()
+
+''' Twitter API returns a number of different status codes. 
+	We want status_code == 200.
+	See https://dev.twitter.com/streaming/overview/connecting for more.
+
+	NOTE: Twitter has 'etiquette' guidelines for how to handle 503, 401, etc. We should follow them!
+		  Right now we don't do anything about this, other than to report the error to stdout.
+'''
 if response.status_code == 200:
 	print "Reponse Code = 200"
 	ct = 0
-	timesup = datetime.datetime(year,month,day,hour,minute).strftime('%s')
+	''' We will almost certainly not keep this code.
+
+		timesup just picks an end point (currently 2 minutes ahead) to stop ingesting tweets.
+		In production, we'd keep ingesting until either an error was thrown or the debate ended.
+
+		For that matter, we also need better error handling here, like how long to wait before 
+		reconnecting if the stream drops or rate limits out? 
+	'''
+	timesup = datetime.datetime(end_time['year',
+								end_time['month'],
+								end_time['day'],
+								end_time['hour'],
+								end_time['minute']
+								).strftime('%s')
 	for line in response.iter_lines():  # Iterate over streaming tweets
 		if int(timesup) > time.time():
 			#print(line.decode('utf8'))
