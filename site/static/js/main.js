@@ -1,4 +1,5 @@
 /* GLOBALS */
+var cluster_id;					// Global so terminate() has access
 var color = "red";				// Toggle, alternates blue/red output on cluster status report (testing only)
 var check_interval = 30000;		// How frequently should we check up on a baking cluster?
 var tweet_interval = 5000;		// How frequently should we pull down new data from SDB?
@@ -17,7 +18,7 @@ function startPeeking(cid, interval) {
 					interval ); // We need interval_id to stop loop
 }
 
-function bakeIt(interval) {
+function bake(interval) {
 	/* Spin up a new cluster, then initiate status check loop 
 	   Note: /bake hits run.py, returns json status.  See run.py documentation for more.
 	*/
@@ -114,7 +115,7 @@ function display(d,back) {
 	*/
 }
 
-function terminateIt(cid) {
+function terminate(cid) {
 	/* Terminate EMR cluster (need cluster ID) */
 	d3.text( '/terminate/'+cid, function(data) {
 		// test output to console
@@ -134,15 +135,22 @@ function terminateIt(cid) {
 $('#pull').click( function() { $('#tweet').html("One moment <br />"); getData(table_name); } );
 
 // Start a new cluster
-$('#bake').click( function() { bakeIt(check_interval); } );
+$('#bake').click( function() { bake(check_interval); } );
 
 // Check on an existing cluster
 $('#already-baking-check').click( function() { 
-	var cluster_id = $('#cid').val(); // This button requires an ID to work properly. No error handling yet!
+	cluster_id = $('#cid').val(); // This button requires an ID to work properly. No error handling yet!
 	$('#bake-report').text("Just a moment!...checking");
 	startPeeking(cluster_id, check_interval);
 } );
 
-// Terminate cluster
-$('#terminate').click( function() { terminateIt(); } );
+// Terminate current cluster
+$('#terminate').click( function() { terminate(cluster_id); } );
+
+// Terminate different cluster
+$('#terminate-other').click( function() { 
+	cluster_id = $('#terminate-cid').val();
+	terminate(cluster_id); 
+} );
+
 

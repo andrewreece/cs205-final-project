@@ -9,6 +9,7 @@ import time
 import json
 import sys
 import boto3
+import creds
 
 # kafka can have multiple ports if multiple producers, be careful
 kafka_port     = '9092'
@@ -54,11 +55,7 @@ kafka_host = ':'.join([hostname,kafka_port])
 kafka = KafkaClient(kafka_host)
 producer = SimpleProducer(kafka)
 
-
-APP_KEY = "bv6mnYBiFeEVKvPEZlg"
-APP_SECRET = "nQZk9Ca8qqJxc1Za07WyW0VPZ6gtAUSF3oPD5sun0"
-OAUTH_TOKEN = "606525030-ilOtJstbRvFCjUNMtOu8DP2HQKGWpQvmUsF6fblE"
-OAUTH_TOKEN_SECRET = "xSVE47qVOFxxZm1oqKwL6zwLVMWpzxCUYGmLJ6CVHR0mZ"
+APP_KEY, APP_SECRET, OAUTH_TOKEN, OAUTH_TOKEN_SECRET = creds.get_twitter_creds()
 
 config_token = OAuth1(APP_KEY,
 					  client_secret=APP_SECRET,
@@ -121,12 +118,12 @@ if response.status_code == 200:
 		For that matter, we also need better error handling here, like how long to wait before 
 		reconnecting if the stream drops or rate limits out? 
 	'''
-	timesup = datetime.datetime(end_time['year',
-								end_time['month'],
-								end_time['day'],
-								end_time['hour'],
-								end_time['minute']
-								).strftime('%s')
+	timesup = datetime.datetime(end_time['year'],
+								  end_time['month'],
+								  end_time['day'],
+								  end_time['hour'],
+								  end_time['minute']).strftime('%s')
+			  
 	for line in response.iter_lines():  # Iterate over streaming tweets
 		if int(timesup) > time.time():
 			#print(line.decode('utf8'))

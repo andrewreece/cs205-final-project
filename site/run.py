@@ -28,7 +28,7 @@ def bake():
 	try:
 		return jsonify(baker.bake_emr())
 	except Exception, e:
-		return str(e)
+		return 'error'+str(e)
 
 ''' Terminate an existing cluster (needs cluster ID) '''
 @app.route("/terminate/<jobid>")
