@@ -75,7 +75,7 @@ def bake_emr():
 	HADOOP_VERSION = '2.6.0'	
 	#SPARK_VERSION  = '1.5.0'		# Spark version is defined by Release version
 	INSTANCE_TYPES  = OrderedDict() 	# Use ordered dict to get master zone first (see below)
-	INSTANCE_TYPES['MASTER'] = "m1.large"	# Master node instance type
+	INSTANCE_TYPES['MASTER'] = "m1.xlarge"	# Master node instance type
 	INSTANCE_TYPES['CORE'] = "m1.medium"	# Core node instance type
 	#INSTANCE_TYPES['TASK'] = "m1.small"	# Task node instance type
 
@@ -86,15 +86,15 @@ def bake_emr():
 	'''
 
 
-	def get_bid_details(best,level,spots,itypes,zone,lowest_bid=0.02):
+	def get_bid_details(best,level,spots,itypes,zone,bid_multiplier=1.2,lowest_bid=0.015,digits=3):
 		prices = [float(x['SpotPrice']) for x in spots['SpotPriceHistory'] if x['AvailabilityZone']==zone and x['InstanceType'] == itypes[level]]
-		avg_price = round(np.mean(prices),3) if len(prices) else np.inf 
-		proposed_bid = round(best[level]['price']*1.2,3)
+		avg_price = round(np.mean(prices),digits) if len(prices) else np.inf 
+		proposed_bid = round(avg_price*bid_multiplier,digits)
 		if proposed_bid < lowest_bid:
 			proposed_bid = lowest_bid
-		return zone, avg_price, proposed_bid
+		return avg_price, proposed_bid
 
-	def find_best_spot_price(ec2,itypes,lowest_bid=0.02,hours_back=1,max_results=20):
+	def find_best_spot_price(ec2,itypes,lowest_bid=0.02,hours_back=3,max_results=20):
 		''' Determines best spot price for given instance types in cluster.
 
 			How it works:
@@ -118,33 +118,33 @@ def bake_emr():
 		best  = {
 			  'MASTER':
 					{ 'zone':'',
-					  'price':np.inf
+					  'price':np.inf,
+					  'bid':lowest_bid
 					},
 			  'CORE':
 					{ 'zone':'',
-					  'price':np.inf
+					  'price':np.inf,
+					  'bid':lowest_bid
 					}
 			}
-
-
 		for zone in zones:
-			new_zone, avgp, new_bid = get_bid_details(best, 'MASTER', spots, INSTANCE_TYPES, zone)
+			avgp, new_bid = get_bid_details(best, 'MASTER', spots, INSTANCE_TYPES, zone)
 
 			if avgp < best['MASTER']['price']:
 				best['MASTER']['zone'] = zone
 				best['MASTER']['price'] = avgp
 				best['MASTER']['bid'] = new_bid
 
-		print "Best bid for MASTER ({}) = {}: {}".format(INSTANCE_TYPES['MASTER'],best["MASTER"]['zone'],best["MASTER"]['bid'])
+		print "Best bid for MASTER ({}) = {}: {}".format(INSTANCE_TYPES['MASTER'],best['MASTER']['zone'],best['MASTER']['bid'])
 		
 		best['CORE']['zone'] = best['MASTER']['zone']
-		_, avgp, new_bid = get_bid_details(best, 'CORE', spots, INSTANCE_TYPES, best['CORE']['zone'])
+		avgp, new_bid = get_bid_details(best, 'CORE', spots, INSTANCE_TYPES, best['CORE']['zone'])
 		best['CORE']['price'] = avgp
-		best['CORE']['bid'] = new_bid
+		best['CORE']['bid'] = new_bid if (new_bid < np.inf) else lowest_bid
 
 		print "Best bid for CORE ({}) = {}: {}".format(INSTANCE_TYPES['CORE'],best['CORE']['zone'],best['CORE']['bid'])
 		
-		return best 
+		return best  
 
 	best = find_best_spot_price(ec2client,INSTANCE_TYPES)
 
@@ -287,7 +287,7 @@ def terminate_emr(job_id):
 	'''
 	client = boto3.client('emr')
 	try:
-		client.terminate_job_flows(JobFlowIds=[jid])
+		client.terminate_job_flows(JobFlowIds=[job_id])
 		return "Cluster terminating now."
 	except Exception, e:
 		return str(e)
