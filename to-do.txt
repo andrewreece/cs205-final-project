@@ -13,3 +13,5 @@ move twitter api creds to s3 file and read into twitter-in.py (they're currently
 
 make sure all your functions still work, in particular main.js, twitter-in and spark-out.
 you didn't just comment on your travel day, but you helpfully consolidated things and made them more efficient.  but you were also jet-lagged.  so.
+
+terminate cluster needs a text box for entry - consider the case where we start a cluster and then refresh the page.  we'll lose the variable that holds the cluster id.
