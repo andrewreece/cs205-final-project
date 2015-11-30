@@ -32,7 +32,6 @@ clusters = client.list_clusters(ClusterStates=['RUNNING','WAITING','BOOTSTRAPPIN
 	    * We set the location for search-terms.txt on s3
 	- If we are on a local machine, no cluster:
 		* We set Kafka's hostname to localhost.
-		* We need to import findspark before loading pyspark.
 	    * We set the location for search-terms.txt in our local directory
 '''
 if len(clusters) > 0:
@@ -44,14 +43,11 @@ if len(clusters) > 0:
 
 else:
 
-	import findspark
-	findspark.init()
 	hostname           = 'localhost'
 	search_terms_fname = '/Users/andrew/git-local/search-terms.txt'
 
 kafka_host = ':'.join([hostname,kafka_port])
 
-	
 kafka = KafkaClient(kafka_host)
 producer = SimpleProducer(kafka)
 
@@ -76,8 +72,6 @@ query_url = config_url + '?' + '&'.join([str(t[0]) + '=' + str(t[1]) for t in da
 # Use stream=True switch on requests.get() to pull in stream indefinitely
 response  = requests.get(query_url, auth=config_token, stream=True)
 
-BATCH_INTERVAL = 60  # How frequently to update (seconds)
-BLOCKSIZE = 50  # How many tweets per update
 
 def set_end_time(minutes_forward=2):
 	''' This function is only for initial test output. We'll probably delete it soon.
@@ -107,6 +101,8 @@ end_time = set_end_time()
 	NOTE: Twitter has 'etiquette' guidelines for how to handle 503, 401, etc. We should follow them!
 		  Right now we don't do anything about this, other than to report the error to stdout.
 '''
+print "END TIME:",end_time
+
 if response.status_code == 200:
 	print "Reponse Code = 200"
 	ct = 0

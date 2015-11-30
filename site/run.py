@@ -15,7 +15,7 @@ app = Flask(__name__)
 
 
 ''' Load web interface index.html, using Jinja2 template '''
-@app.route("/")
+@app.route("/admini")
 def template_index():
 	try:
 		return render_template('index.html')
