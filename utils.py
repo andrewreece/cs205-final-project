@@ -1,7 +1,7 @@
 import time, json, boto3, re
 from dateutil import parser, tz
 from datetime import datetime, timedelta
-
+from labMTsimple.storyLab import *
 from pyspark.sql import SQLContext, Row
 import pyspark.sql.functions as sqlfunc
 from pyspark.sql.types import *
@@ -112,19 +112,6 @@ def get_relevant_fields(item,json_terms,debate_party):
 def make_row(d,doPrint=False):
     tid = d[0]
     tdata = d[1]
-    if doPrint:
-        print 'tid:',tid
-        print 'tid type:',type(tid)
-        print
-        print 'timestamp'
-        print type(tdata['timestamp'])
-        print tdata['timestamp']
-        print
-        print 'hashtags'
-        print tdata['hashtags']
-        print 'hashtags type:', type(tdata['hashtags'])
-        print
-        print
 
     return Row(id             =tid,
                username       =tdata['username'],
@@ -136,9 +123,13 @@ def make_row(d,doPrint=False):
                first_term     =tdata['first_term']
               )
 
-def process(time, rdd):
-    print("========= %s =========" % str(time))
+def process(rdd,json_terms,debate_party):
+
     try:
+
+        language = 'english'
+        labMT,labMTvector,labMTwordList = emotionFileReader(stopval=1.0,lang=language,returnVector=True)
+
         # Get the singleton instance of SQLContext
         sqlContext = getSqlContextInstance(rdd.context)
 
@@ -161,17 +152,31 @@ def process(time, rdd):
 
         sqlContext.registerFunction("first_word", lambda x: x.split(" ")[0])
 
-        query = "SELECT text FROM tweets WHERE first_term='trump'"
+        cands = json_terms['candidates'][debate_party]
 
-        ct_df = sqlContext.sql(query).cache()
-        mapped = ct_df.map(lambda x: (1,x.text)).reduceByKey(lambda x,y: ' '.join([str(x),str(y)]))
-        print 'here is the sql query output:'
-        print ct_df.collect()
-        print
-        print 'here is the mapped output:'
-        print mapped.collect()
-        #print df.groupBy("first_term","text").show()
-        print
+        # loop over candidates, check if tweet mentions each one
+        for name in cands.keys():
+            query = "SELECT text FROM tweets WHERE first_term='{}'".format(name)
+
+            result = sqlContext.sql(query).cache()
+            mapped = (result.map(lambda x: (1,x.text))
+                            .reduceByKey(lambda x,y: ' '.join([str(x),str(y)]))
+                            .map(lambda x: x[1])
+                     )
+
+            print 'here is the mapped output for {}:'.format(name)
+            tmp = mapped.collect()
+            if len(tmp) > 0:
+                text = tmp[0]
+                sentiment, vec = emotion(text,labMT,shift=True,happsList=labMTvector) 
+            else:
+                text = None 
+                sentiment = 'No sentiment for {} this interval'.format(name)
+            print text
+            print 
+            print 'sentiment score: {}'.format(sentiment)
+            print
+            print 
         print 'should be over now'
     except Exception, e:
         print 

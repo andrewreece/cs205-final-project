@@ -81,7 +81,7 @@ filtered = (kstream.map(make_json)
 				.cache()
 		)
 
-filtered.foreachRDD(process)
+filtered.foreachRDD(lambda rdd: process(rdd,jdata,party_of_debate))
 #kstream.foreachRDD(process)
 #kstream.foreachRDD(lambda rdd: rdd.foreachPartition(write_to_db))
 ssc.start()
