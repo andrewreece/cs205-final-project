@@ -30,8 +30,10 @@ def getLogLik(allWords,nTopics,wordTopicCounters,topicCounters,beta):
     logLik = nTopics*(logGamma2(nVocab*beta)-nVocab*logGamma2(beta))
     for ii in xrange(0,nTopics):
         logLik = logLik - logGamma2(topicCounters[ii]+nVocab*beta)
+        assert topicCounters[ii] >= 0, "topic counter error"
         for jj in uniqueWords:
             logLik = logLik + logGamma2(wordTopicCounters[jj][ii]+beta)
+            assert wordTopicCounters[jj][ii] >= 0, "word counter error"
     return logLik
 
 def logGamma2(num):
@@ -157,7 +159,7 @@ def drawTopic(wordIndex,allWords,topicLabel,docLabel,nTopics,wordTopicCounters, 
    
     for ii in xrange(0,nTopics):
         if ii == currentTopic:
-            probVector[ii] = (wordTopicCounters[currentWord][ii]+beta-1)/(topicCounters[ii] + nVocab*beta-1)
+            probVector[ii] = (wordTopicCounters[currentWord][ii]+beta-1)/(topicCounters[ii] + nVocab*beta - 1)
             probVector[ii] = probVector[ii]*(docTopicCounters[currentDoc][ii]+alpha-1)/(docCounters[currentDoc] + \
                                                                                         nTopics*alpha - 1)
         else:
@@ -181,22 +183,17 @@ def drawTopic(wordIndex,allWords,topicLabel,docLabel,nTopics,wordTopicCounters, 
    
     return newTopic, wordTopicCounters, docTopicCounters, topicCounters
 
-def synchronizeCounts(WordDocVec_OrderedSet):
-
-    allWordCountsS = {}
-    allTopicCountsS = {ii:0 for ii in xrange(nTopics)}
-
-    for jj in allWordCounts.keys():
-        if jj not in allWordCountsS:
-            allWordCountsS[jj] = collections.Counter()
-        for kk in allWordCounts[jj].keys():
-            allWordCountsS[jj][kk] += allWordCounts[jj][kk]
-            allTopicCountsS[kk] += allWordCounts[jj][kk]
+def verifyCounts(WordDocVec_OrderedSet):
+    uniqueWords = WordDocVec_OrderedSet[3]
+    topicLabel = WordDocVec_OrderedSet[5]
+    allWords = WordDocVec_OrderedSet[10]
+    allWordCountsS = WordDocVec_OrderedSet[6]
     
-    return (WordDocVec_OrderedSet[0],WordDocVec_OrderedSet[1],WordDocVec_OrderedSet[2],\
-            WordDocVec_OrderedSet[3],WordDocVec_OrderedSet[4],WordDocVec_OrderedSet[5],\
-            allWordCountsS,allTopicCountsS,WordDocVec_OrderedSet[8],WordDocVec_OrderedSet[9],\
-            WordDocVec_OrderedSet[10],WordDocVec_OrderedSet[11])
+    for ii in uniqueWords:
+        for jj in xrange(nTopics):
+            if allWordCountsS[ii][jj] < sum((topicLabel == jj) & (allWords == ii)):
+                print "sync outside counts: ",allWordCounts[ii][jj]," inside counts: ",allWordCountsS[ii][jj] ," present value: ",sum((topicLabel == jj) & (allWords == ii))
+                asdf
 
 def stationaryLDA(WordDocVec_OrderedPair):
 
@@ -240,7 +237,15 @@ def stationaryLDA(WordDocVec_OrderedPair):
             for jj in xrange(0,nTopics):
                 theta[ii,jj] = (docTopicCounters[uniqueDocs[ii]][jj] + alpha)/(sumCurr + nTopics*alpha)
         logLik[count+1] = getLogLik(allWords,nTopics,wordTopicCounters,topicCounters,beta)
+        print "first time: ",logLik
         count = count + 1
+    """
+    for ii in uniqueWords:
+        for jj in xrange(nTopics):
+            if wordTopicCounters[ii][jj] != sum((topicLabel == jj) & (allWords == ii)):
+                print "first time topic counts: ",wordTopicCounters[ii][jj] ," present value: ",sum((topicLabel == jj) & (allWords == ii))
+                asdf
+    """
 
     return (theta, phi, logLik, uniqueWords, uniqueDocs, topicLabel,\
                                             wordTopicCounters, topicCounters, docTopicCounters, docCounters,allWords,docLabel)
@@ -261,6 +266,14 @@ def stationaryLDA_post(WordDocVec_OrderedSet):
     docLabel = WordDocVec_OrderedSet[11]
 
     nTopics = 50 
+
+    """
+    for ii in uniqueWords:
+        for jj in xrange(nTopics):
+            if wordTopicCounters[ii][jj] < sum((topicLabel == jj) & (allWords == ii)):
+                print "post outside counts: ",allWordCounts[ii][jj]," inside counts: ",wordTopicCounters[ii][jj] ," present value: ",sum((topicLabel == jj) & (allWords == ii))
+                asdf
+    """
    
     # just need allWords, docLabel, topicLabel
     alpha = 0.001
@@ -273,9 +286,14 @@ def stationaryLDA_post(WordDocVec_OrderedSet):
                                                                                          
     logLik = np.zeros(nIterations+1)
     logLik[0] = getLogLik(allWords,nTopics,wordTopicCounters,topicCounters,beta)
-   
+
     while count < nIterations:
         for ii in xrange(0,len(allWords)):
+            if wordTopicCounters[allWords[ii]][topicLabel[ii]] <= 0:
+                print "ith word: ", ii
+                print "value outside: ", allWordCounts[allWords[ii]][topicLabel[ii]]
+                print "value inside: ", wordTopicCounters[allWords[ii]][topicLabel[ii]]
+                asdf
             topic, wordTopicCounters, docTopicCounters, topicCounters = drawTopic(ii,allWords,\
                               topicLabel,docLabel,nTopics,wordTopicCounters, docTopicCounters, \
                                                                                   topicCounters, docCounters,alpha,beta)
@@ -290,14 +308,34 @@ def stationaryLDA_post(WordDocVec_OrderedSet):
             for jj in xrange(0,nTopics):
                 theta[ii,jj] = (docTopicCounters[uniqueDocs[ii]][jj] + alpha)/(sumCurr + nTopics*alpha)
         logLik[count+1] = getLogLik(allWords,nTopics,wordTopicCounters,topicCounters,beta)
+        print "second time: ",logLik
         count = count + 1
 
     return (theta, phi, logLik, uniqueWords, uniqueDocs, topicLabel,\
                                             wordTopicCounters, topicCounters, docTopicCounters, docCounters,allWords,docLabel)
 
+def synchronizeCounts(WordDocVec_OrderedSet,allWordCounts,allTopicCounts):
+    
+    uniqueWords = WordDocVec_OrderedSet[3]
+    topicLabel = WordDocVec_OrderedSet[5]
+    allWords = WordDocVec_OrderedSet[10]
+    wordTopicCountCurr = WordDocVec_OrderedSet[6]
+    # after extracting the 4 variables above for the current partition, compare the partition's 
+    # word-topic counts dictionary, "wordTopicCountCurr", to the accumulated word topic counts "allWordCounts"
+    for ii in uniqueWords:
+        for jj in xrange(nTopics):
+            if allWordCounts[ii][jj] < sum((topicLabel == jj) & (allWords == ii)):
+                print "sync counts: ",allWordCounts[ii][jj],"old counts: ",wordTopicCountCurr[ii][jj]," present value: ",sum((topicLabel == jj) & (allWords == ii))                
+                asdf
+      
+    return (WordDocVec_OrderedSet[0],WordDocVec_OrderedSet[1],WordDocVec_OrderedSet[2],\
+            WordDocVec_OrderedSet[3],WordDocVec_OrderedSet[4],WordDocVec_OrderedSet[5],\
+            allWordCounts.copy(),allTopicCounts.copy(),WordDocVec_OrderedSet[8],WordDocVec_OrderedSet[9],\
+            WordDocVec_OrderedSet[10],WordDocVec_OrderedSet[11])
+
 numPart = 5
 allTweets = sc.textFile('filtered.txt') 
-allTweets = sc.parallelize(allTweets.map(getTweet).collect(),numPart).map(lambda x: (len(x)%5,x)).partitionBy(numPart) 
+allTweets = sc.parallelize(allTweets.map(getTweet).collect(),numPart).map(lambda x: (len(x)%5,x)).partitionBy(numPart).cache() 
 allTweets = allTweets.groupByKey().mapValues(list) # (partitionNum, [['tweet1','tweet2','tweet3',...]])
 
 #print allTweets.collect()[0][1][0][:5]
@@ -308,15 +346,18 @@ allTweets = allTweets.mapValues(preProcessWords) # (partitionNum, (wordVec,docVe
 
 startT = time.time()
 allTweets = allTweets.mapValues(stationaryLDA) # (partitionNum, (theta,phi,logLik,uWords,uDocs,topicLabel,\
-                                               # wordTopicCounters, topicCounters, docTopicCounters, docCounters))
+                                               # wordTopicCounters, topicCounters, docTopicCounters, docCounters, allWords, docLabel))
 
 orderedPairs = allTweets.collect()
 
 nTopics = 50
+# accumulate word-topic and topic counts across partitions
 allWordCounts = {}
 allTopicCounts = {ii:0 for ii in xrange(0,nTopics)}
 for ii in xrange(numPart):
+    # current partition's word-topic counts dictionary
     currWordTopicCounter = orderedPairs[ii][1][6]
+    
     for jj in currWordTopicCounter.keys():
         if jj not in allWordCounts:
             allWordCounts[jj] = collections.Counter()
@@ -324,10 +365,26 @@ for ii in xrange(numPart):
             allWordCounts[jj][kk] += currWordTopicCounter[jj][kk]
             allTopicCounts[kk] += currWordTopicCounter[jj][kk]
 
-allTweets = allTweets.mapValues(synchronizeCounts)
+# verify accumulated word-topic counts are greater than or equal to corresponding values in each parition
+for ii in xrange(numPart):
+    currWordTopicCounter = orderedPairs[ii][1][6]
+   
+    uniqueWordsT = orderedPairs[ii][1][3]
+    topicLabelT = orderedPairs[ii][1][5]
+    allWordsT = orderedPairs[ii][1][10]
+    
+    for jj in uniqueWordsT:
+        for kk in xrange(nTopics):
+            if allWordCounts[jj][kk] < sum((topicLabelT == kk) & (allWordsT == jj)):
+                print "initial total counts: ",allWordCounts[jj][kk] ," present value: ",sum((topicLabelT == kk) & (allWordsT == jj))
+                asdf # break command
+
+# code currently break here in "synchronizeCounts", see "synchronizeCounts" above
+allTweets = allTweets.mapValues(lambda x: synchronizeCounts(x,allWordCounts.copy(),allTopicCounts.copy()))
+allTweets.count()
 allWordCounts0 = allWordCounts.copy()
 
-for numIt in xrange(749):
+for numIt in xrange(1):
     allTweets = allTweets.mapValues(stationaryLDA_post)
 
     orderedPairs = allTweets.collect()
@@ -349,7 +406,8 @@ for numIt in xrange(749):
             allTopicCounts[jj] += allWordCounts[ii][jj]
 
     allWordCounts0 = allWordCounts.copy()
-    allTweets = allTweets.mapValues(synchronizeCounts)
+    allTweets = allTweets.mapValues(synchronizeCounts).cache()
+
 
 uniqueWords = np.array(allWordCounts.keys())
 nVocab = len(uniqueWords)
@@ -366,9 +424,39 @@ for ii in xrange(50):
 endT = time.time()
 print "total time: ",endT-startT
 
+#allTweets = allTweets.mapValues(verifyCounts)
+#allTweets.count()
 
+#main extras
+"""
+    uniqueWordsT = orderedPairs[ii][1][3]
+    topicLabelT = orderedPairs[ii][1][5]
+    allWordsT = orderedPairs[ii][1][10]
+    
+    for jj in uniqueWordsT:
+        for kk in xrange(nTopics):
+            if currWordTopicCounter[jj][kk] != sum((topicLabelT == kk) & (allWordsT == jj)):
+                print "main inside counts: ",currWordTopicCounter[jj][kk] ," present value: ",sum((topicLabelT == kk) & (allWordsT == jj))
+                asdf
+    """
 
+# synchronize counts extras
+"""
+    allWordCountsS = {}
+    allTopicCountsS = {ii:0 for ii in xrange(nTopics)}
 
+    for jj in allWordCounts.keys():
+        if jj not in allWordCountsS:
+            allWordCountsS[jj] = collections.Counter()
+        for kk in allWordCounts[jj].keys():
+            allWordCountsS[jj][kk] = allWordCounts[jj][kk]
+            allTopicCountsS[kk] += allWordCounts[jj][kk]
+    for jj in xrange(nTopics):
+        assert allTopicCountsS[jj] == allTopicCounts[jj], "topic counts different"
+    for jj in allWordCounts.keys():
+        for kk in allWordCounts[jj].keys():
+            assert allWordCounts[jj][kk] == allWordCountsS[jj][kk], "word counts different"
+    """
 
 
 
