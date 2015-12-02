@@ -124,7 +124,7 @@ def make_row(d,doPrint=False):
                first_term     =tdata['first_term']
               )
 
-def process(rdd,json_terms,debate_party,table_name='sentitest',n_parts=10):
+def process(rdd,json_terms,debate_party,domain_name='sentiment',n_parts=10):
 
     rdd.cache()
 
@@ -263,7 +263,7 @@ def process(rdd,json_terms,debate_party,table_name='sentitest',n_parts=10):
         try:
             # write row of data to SDB
             client.put_attributes(
-                DomainName= table_name,
+                DomainName= domain_name,
                 ItemName  = str(time.time()),
                 Attributes= attrs 
             ) 
@@ -332,7 +332,7 @@ def getSqlContextInstance(sparkContext):
     return globals()['sqlContextSingletonInstance']
 
 
-def write_to_db(iterator,level='tweet',domain_name='tweettest'):
+def write_to_db(iterator,level='tweet',domain_name='tweets'):
     ''' Write output to AWS SimpleDB table after analysis is complete 
             - Uses boto3 and credentials file. (If AWS cluster, credentials are associated with creator.)
             - UTF-8 WARNING!
@@ -368,24 +368,28 @@ def write_to_db(iterator,level='tweet',domain_name='tweettest'):
     for row in iterator:
         k,v = row
         attrs = []
+
         try:
             for k2,v2 in v.items():
                 # If v2 IS A LIST: join as comma-separated string
                 if isinstance(v2,list):
                     v2 = ','.join([val for val in v2]) if len(v2)>0 else ''
+                # If v2 is BOOL: convert to string
+                elif isinstance(v2,bool):
+                    v2 = str(v2)
                 # If v2 IS EMPTY: convert to empty string
                 elif v2 is None:
                     v2 = ''
                 # Get rid of all UTF-8 weirdness, including emojis.
                 v2 = v2.encode('utf8').decode('ascii','ignore')
-                attrs.append( {'Name':k2,'Value':v2,'Replace':True} )
+                attrs.append( {'Name':k2,'Value':v2,'Replace':False} )
         except Exception, e:
             print str(e)
             print v 
         try:
             # write row of data to SDB
             client.put_attributes(
-                DomainName= table_name,
+                DomainName= domain_name,
                 ItemName  = str(k),
                 Attributes= attrs 
             ) 

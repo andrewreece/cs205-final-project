@@ -2,6 +2,7 @@ import os
 import re
 import codecs
 import numpy as np 
+from os.path import expanduser
 
 ''' This is a modified version of Andy Reagan's code at 
     https://github.com/andyreagan/labMT-simple/blob/master/labMTsimple/storyLab.py 
@@ -19,8 +20,13 @@ def emotionFileReader(stopval=1.0,lang="english",min=1.0,max=9.0,returnVector=Fa
   labMT1flag = False
   scoreIndex = 1 # second value
 
-  path = ''#'/home/hadoop/'
-  fileName = 'labmt.txt'
+  path = expanduser("~")
+  if path == "/home/hadoop":
+    path += '/scripts/'
+  else:
+    path += '/git-local/'
+
+  fileName = path+'labmt.txt'
 
   try:
     f = codecs.open(fileName,'r','utf8')
