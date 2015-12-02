@@ -27,7 +27,7 @@ jdata = get_search_json(search_json_fname)
 search_terms = pool_search_terms(jdata)
 
 # Streaming Spark splits data into separate RDDs every BATCH_DURATION seconds
-BATCH_DURATION = 30 
+BATCH_DURATION = 10 
 
 # kafka can have multiple ports if multiple producers, be careful
 kafka_port     = '9092'
@@ -81,9 +81,10 @@ filtered = (kstream.map(make_json)
 				.cache()
 		)
 
+#filtered.foreachRDD(lambda rdd: rdd.foreachPartition(write_to_db))
 filtered.foreachRDD(lambda rdd: process(rdd,jdata,party_of_debate))
 #kstream.foreachRDD(process)
-#kstream.foreachRDD(lambda rdd: rdd.foreachPartition(write_to_db))
+#
 ssc.start()
 ssc.awaitTermination() # we should figure out how to set a termination marker (NOV 26)
 

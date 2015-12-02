@@ -1,12 +1,13 @@
 import time, json, boto3, re
 from dateutil import parser, tz
 from datetime import datetime, timedelta
-from labMTsimple.storyLab import *
+from sentiment import *
 from pyspark.sql import SQLContext, Row
 import pyspark.sql.functions as sqlfunc
 from pyspark.sql.types import *
 
 search_terms = []
+n_parts = 10
 
 def get_search_json(fname):
 	f = open(fname,'r')
@@ -123,12 +124,28 @@ def make_row(d,doPrint=False):
                first_term     =tdata['first_term']
               )
 
-def process(rdd,json_terms,debate_party):
+def process(rdd,json_terms,debate_party,table_name='sentitest',n_parts=10):
+
+    rdd.cache()
 
     try:
 
-        language = 'english'
-        labMT,labMTvector,labMTwordList = emotionFileReader(stopval=1.0,lang=language,returnVector=True)
+        candidate_dict = {}
+        candidate_names = json_terms['candidates'][debate_party].keys()
+        candidate_names.append( 'general' )        
+
+        for candidate in candidate_names:
+            candidate_dict[candidate] =   {'party':debate_party if candidate is not 'general' else 'general',
+                                          'num_tweets':'0',
+                                          'sentiment_avg':'',
+                                          'sentiment_std':'',
+                                          'highest_sentiment_tweet':'',
+                                          'lowest_sentiment_tweet':''
+                                         }
+
+        # default settings remove words scored 4-6 on the scale (too neutral). 
+        # adjust with kwarg stopval, determines 'ignore spread' out from 5. eg. default stopval = 1.0 (4-6)
+        labMT = emotionFileReader() 
 
         # Get the singleton instance of SQLContext
         sqlContext = getSqlContextInstance(rdd.context)
@@ -147,37 +164,113 @@ def process(rdd,json_terms,debate_party):
         row_rdd = rdd.map(lambda data: make_row(data))
         df = sqlContext.createDataFrame(row_rdd, schema)
 
+        # how many tweets per candidate per batch?
+        df2 = (df.groupBy("first_term")
+                 .count()
+                 .alias('df2')
+              )
+
+        counts = (df2.map(lambda row: row.asDict() )
+                     .map(lambda row: (row['first_term'],row['count']))
+                  )
+        #print 'counts collect'
+        #print counts.collect()
+
+        cRdd = rdd.context.parallelize( candidate_names, n_parts )
+
+        def update_dict(d):
+            data = d[0]
+            data['num_tweets'] = str(d[1]) if d[1] is not None else data['num_tweets']
+            return data 
+
+        tmp = (cRdd.map( lambda c: (c, candidate_dict[c]), preservesPartitioning=True )
+                               .leftOuterJoin( counts, numPartitions=n_parts )
+                               .map( lambda data: (data[0], update_dict(data[1])) )
+                               .collect()
+                    )
+        candidate_dict = { k:v for k,v in tmp }
         # Register as table
         df.registerTempTable("tweets")
+        # loop over candidates, check if tweet mentions each candidate
+        for candidate in candidate_names:
 
-        sqlContext.registerFunction("first_word", lambda x: x.split(" ")[0])
+            accum = rdd.context.accumulator(0)
 
-        cands = json_terms['candidates'][debate_party]
+            query = "SELECT text FROM tweets WHERE first_term='{}'".format(candidate)
 
-        # loop over candidates, check if tweet mentions each one
-        for name in cands.keys():
-            query = "SELECT text FROM tweets WHERE first_term='{}'".format(name)
+            result = sqlContext.sql(query)
+            try:
+                scored = result.map( lambda x: (emotion(x.text,labMT), x.text) ).cache()
+            except Exception,e:
+                print 'nothing in scored'
+                print str(e)
 
-            result = sqlContext.sql(query).cache()
-            mapped = (result.map(lambda x: (1,x.text))
-                            .reduceByKey(lambda x,y: ' '.join([str(x),str(y)]))
-                            .map(lambda x: x[1])
-                     )
+            scored.foreach(lambda x: accum.add(1))
 
-            print 'here is the mapped output for {}:'.format(name)
-            tmp = mapped.collect()
-            if len(tmp) > 0:
-                text = tmp[0]
-                sentiment, vec = emotion(text,labMT,shift=True,happsList=labMTvector) 
-            else:
-                text = None 
-                sentiment = 'No sentiment for {} this interval'.format(name)
-            print text
-            print 
-            print 'sentiment score: {}'.format(sentiment)
-            print
-            print 
-        print 'should be over now'
+            if accum.value > 0:
+                accum2 = rdd.context.accumulator(0)
+                try:
+                    scored = scored.filter(lambda score: score[0][0] is not None).cache()
+                except Exception,e:
+                    print 'nothing left after filtering out no-scores'
+
+                scored.foreach(lambda x: accum2.add(1))
+                if accum2.value > 1: # we want at least 2 tweets for highest and lowest scoring
+                    high_parts = scored.takeOrdered(1, key = lambda x: -x[0][0])[0]
+                    high_scores, high_tweet = high_parts
+                    
+                    #print 'high scores'
+                    #print high_scores
+                    high_avg = str(high_scores[0])
+                    high_tweet = high_tweet.encode('utf8').decode('ascii','ignore')
+                    
+                    low_parts  = scored.takeOrdered(1, key = lambda x:  x[0][0])[0]
+                    
+                    low_scores, low_tweet = low_parts
+                    #print 'low scores'
+                    #print low_scores
+                    low_avg = str(low_scores[0])
+                    low_tweet = low_tweet.encode('utf8').decode('ascii','ignore')
+
+                else:
+                    high_avg = low_avg = high_tweet = low_tweet = ''
+
+
+                candidate_dict[candidate]['highest_sentiment_tweet'] = '_'.join([high_avg,high_tweet])
+                candidate_dict[candidate]['lowest_sentiment_tweet']  = '_'.join([low_avg,low_tweet])  
+
+                sentiment = (result.map(lambda x: (1,x.text))
+                                        .reduceByKey(lambda x,y: ' '.join([str(x),str(y)]))
+                                        .map( lambda text: emotion(text[1],labMT) )
+                                        .collect()
+                                 )
+                try:
+                    sentiment_avg, sentiment_std = sentiment[0]
+                except Exception,e:
+                    print str(e)
+                    print 'sentiment is empty'
+
+                candidate_dict[candidate]['sentiment_avg'] = str(sentiment_avg)
+                candidate_dict[candidate]['sentiment_std'] = str(sentiment_std) 
+
+        attrs = []
+        import boto3,json
+        client = boto3.client('sdb')
+
+        for cname,cdata in candidate_dict.items():
+            attrs.append( {'Name':cname,'Value':json.dumps(cdata),'Replace':True} )
+
+        try:
+            # write row of data to SDB
+            client.put_attributes(
+                DomainName= table_name,
+                ItemName  = str(time.time()),
+                Attributes= attrs 
+            ) 
+        except Exception,e:
+            print 'sdb write error: {}'.format(str(e))
+
+        #rdd.foreachPartition(lambda p: write_to_db(p,level='group'))
     except Exception, e:
         print 
         print 'THERE IS AN ERROR!!!!'
@@ -239,7 +332,7 @@ def getSqlContextInstance(sparkContext):
     return globals()['sqlContextSingletonInstance']
 
 
-def write_to_db(iterator, table_name="tweettest"):
+def write_to_db(iterator,level='tweet',domain_name='tweettest'):
     ''' Write output to AWS SimpleDB table after analysis is complete 
             - Uses boto3 and credentials file. (If AWS cluster, credentials are associated with creator.)
             - UTF-8 WARNING!
@@ -271,6 +364,7 @@ def write_to_db(iterator, table_name="tweettest"):
               * You added a comment on the Boto3 source github page where this issue was being discussed,
                 make sure to check and see if the author has answered you!
     '''
+
     for row in iterator:
         k,v = row
         attrs = []
