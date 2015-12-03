@@ -3,10 +3,10 @@ input {
 	font-size:14pt;
 }
 
-#tweet {
-	width:500px;
+#tweet, #sentiment {
+	width:600px;
 	display:block;
-	height:300px;
+	height:200px;
 	font-family:consolas;
 	border: solid 2px steelblue;
 	background-color: lightgray;

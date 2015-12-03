@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, current_app, render_template
+from flask import Flask, jsonify, request, current_app, render_template, Response
 from functools import wraps
 from random import randint
 from datetime import datetime, timedelta
@@ -7,6 +7,7 @@ import numpy as np
 import time
 import boto3
 import baker # this is a library we made with EMR baking functions
+import utils # misc helper functions, includes get/set debate schedule
 from nocache import nocache # this is a library someone else made that keeps Flask from caching results
 
 
@@ -14,11 +15,19 @@ from nocache import nocache # this is a library someone else made that keeps Fla
 app = Flask(__name__)
 
 
-''' Load web interface index.html, using Jinja2 template '''
-@app.route("/admini")
+''' Load web interface index.html '''
+@app.route("/")
 def template_index():
 	try:
 		return render_template('index.html')
+	except Exception, e:
+		return "Error:"+str(e)
+
+''' Load admin interface admini.html '''
+@app.route("/admini")
+def template_admini():
+	try:
+		return render_template('admini.html')
 	except Exception, e:
 		return "Error:"+str(e)
 
@@ -74,6 +83,23 @@ def check_cluster_status(cid):
 	except Exception, e:
 		return str(e)
 
+''' Scrape debate schedule and write to file '''
+@app.route('/setschedule')
+def set_schedule():
+	try:
+		utils.set_debate_schedule()
+		return "ok"
+	except Exception,e:
+		return str(e)
+
+''' Get current debate schedule on file '''
+@app.route('/getschedule')
+def get_schedule():
+	try:
+		csv = utils.get_debate_schedule()
+		return Response(csv,mimetype="text/csv", headers={"Content-disposition":"attachment; filename=events.csv"})
+	except Exception,e:
+		print str(e)
 
 ''' Run main Flask app '''
 if __name__ == '__main__':

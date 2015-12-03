@@ -1,13 +1,13 @@
-/* GLOBALS */
-var cluster_id;					// Global so terminate() has access
-var color = "red";				// Toggle, alternates blue/red output on cluster status report (testing only)
-var check_interval = 30000;		// How frequently should we check up on a baking cluster?
-var tweet_interval = 5000;		// How frequently should we pull down new data from SDB?
-var interval_id, interval_id2;	// setInterval IDs (we need these to stop them)
-var table_name = "tweettest";	// SDB table name (we may end up having more than one for LDA, sentiment, etc)
-var ct = 0;						// ct and max_ct keep track of how many tweets we've displayed in our output
-var max_ct = 40;				// "" ""
-
+/* GLOBALS */	
+var cluster_id;						// Global so terminate() has access
+var color = "red";					// Toggle, alternates blue/red output on cluster status report (testing only)
+var check_interval = 30000;			// How frequently should we check up on a baking cluster?
+var tweet_interval = 5000;			// How frequently should we pull down new data from SDB?
+var interval_id, interval_id2;		// setInterval IDs (we need these to stop them)
+var table_name = "tweettest";		// SDB table name (we may end up having more than one for LDA, sentiment, etc)
+var ct = 0;							// ct and max_ct keep track of how many tweets we've displayed in our output
+var max_ct = 40;					// "" ""
+var tnames=['tweets','sentiment']; 	// SDB table names 
 var bake_starting_msg = "Starting cluster...stand by for reporting<br />";
 var bake_complete_msg = "CLUSTER IS FULLY BAKED. DATA COMING.";
 
@@ -41,7 +41,7 @@ function ovenPeek(cid) {
 		// If WAITING: Should see only new data, cluster jobs have completed.
 		if ((data.status=="WAITING") || (data.status=="RUNNING")) {
 
-			getData(table_name); 		// pull down SDB data
+			getData(tnames); 		// pull down SDB data
 			clearInterval(interval_id);	// stop cluster status check loop
 
 			// Print "all done" status
@@ -62,7 +62,7 @@ function ovenPeek(cid) {
 	});
 }
 
-function getData(table_name) {
+function getData(table_names) {
 	/* Pulls data down from SDB, via Flask
 			- Hits run.py, see run.py for more
 			- Currently returns unprocessed tweets (only a bit of field filtering from Spark)
@@ -77,11 +77,21 @@ function getData(table_name) {
 			if (ct < max_ct) {
 
 				ct++;
-				d3.json('/pull/'+table_name, function(error,data) {
+				console.log('/pull/'+table_names[0]);
+				console.log('/pull/'+table_names[1]);
+				d3.json('/pull/'+table_names[0], function(error,data) {
+					console.log(data);
 					var data_len = d3.entries(data).length;
 					var ix = data_len - 1;
 					var new_html = "<br /><br />"+JSON.stringify(d3.entries(data)[ix].value);
 					d3.select("#tweet").html( $('#tweet').html()+new_html );
+				});
+
+				d3.json('/pull/'+table_names[1], function(error,data) {
+					var data_len = d3.entries(data).length;
+					var ix = data_len - 1;
+					var new_html = "<br /><br />"+JSON.stringify(d3.entries(data)[ix].value);
+					d3.select("#sentiment").html( $('#sentiment').html()+new_html );
 				});
 			// If we reach maximum number of test outputs, stop the loop, reset ct
 			} else {
@@ -132,7 +142,7 @@ function terminate(cid) {
 */
 
 // Get data from SDB
-$('#pull').click( function() { $('#tweet').html("One moment <br />"); getData(table_name); } );
+$('#pull').click( function() { $('#tweet').html("One moment <br />"); getData(tnames); } );
 
 // Start a new cluster
 $('#bake').click( function() { bake(check_interval); } );
