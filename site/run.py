@@ -83,6 +83,54 @@ def check_cluster_status(cid):
 	except Exception, e:
 		return str(e)
 
+
+@app.route('/get_debate_options')
+@nocache
+def get_debate_options():
+	try:
+		client  = boto3.client('sdb')
+		query = 'select * from debates'
+		results = client.select(SelectExpression=query)['Items']
+		output = []
+			
+		for r in results:
+			a = r['Attributes']
+			for el in a:
+				if el['Name'] == 'party':
+					party = el['Value']
+				if el['Name'] == 'ddate':
+					ddate = el['Value']
+				if el['Name'] == 'start_time':
+					start = el['Value']
+				if el['Name'] == 'end_time':
+					end = el['Value']
+			output.append( {"party":party,"ddate":ddate,"start_time":start,"end_time":end} )
+		
+		return jsonify({"data":output})
+	except Exception,e:
+		return str(e)
+
+
+@app.route('/get_debate_data/<start>/<end>')
+def get_debate_data(start,end):
+	try:
+		client  = boto3.client('sdb')
+		paginator = client.get_paginator('select')
+		query = 'SELECT * FROM sentiment WHERE timestamp BETWEEN "{}" AND "{}"'.format(start,end)
+		output = {}
+			
+		response = paginator.paginate( SelectExpression=query, ConsistentRead=True )
+		ct = 0
+		for r in response:
+			for i,row in enumerate(r['Items']):
+				ct+=1
+				output[str(row['Name'])] = row['Attributes']
+
+		return jsonify({"data":output})
+	except Exception,e:
+		return str(e)
+
+
 ''' Scrape debate schedule and write to file '''
 @app.route('/setschedule')
 @nocache # we need nocache, otherwise these results may cache in some browsers and ignore new data

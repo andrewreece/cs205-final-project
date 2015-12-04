@@ -28,22 +28,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename = 'css/rickshaw.min.css') }}">
   <!-- COLOR BREWER -->
   <!--<script src="{{ url_for('static', filename = 'js/colorbrewer.js') }}"></script>-->
-<style>
-#chart_container {
-        position: relative;
-        font-family: Arial, Helvetica, sans-serif;
-}
-#chart {
-        position: relative;
-        left: 40px;
-}
-#y_axis {
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        width: 40px;
-}
-</style>
+
   </head>
 
   <body>
@@ -64,11 +49,10 @@
     </div>
 
     <div id="tracker-options">
-    Choose from the following options to start up the sentiment tracker: <br /><br />
 
     <div id="step1">
         1. Tracking options: <br />
-        <input type="radio" name="timeframe" value="now" >Live Tracking<br />
+        <input type="radio" name="timeframe" value="now" >Live Tracking 
         <input type="radio" name="timeframe" value="past">Previous Debate<br />
     </div>
     
@@ -79,35 +63,18 @@
 
   <div id="sentiment-tracker">
   </div>
-  
+  <br /><br />
 <div id="chart_container">
         <div id="y_axis"></div>
         <div id="chart"></div>
+        <div id="legend"></div>
+        <form id="offset_form" class="toggler">
+                <input type="radio" name="offset" id="lines" value="lines" checked>
+                <label class="lines" for="lines">lines</label><br>
+                <input type="radio" name="offset" id="stack" value="zero">
+                <label class="stack" for="stack">stack</label>
+        </form>
 </div>
-<script>
-
-var graph = new Rickshaw.Graph( {
-        element: document.querySelector("#chart"),
-        width: 540,
-        height: 240,
-        series: [ {
-                data: [ { x: -1893456000, y: 92228531 }, { x: -1577923200, y: 106021568 }, { x: -1262304000, y: 123202660 }, { x: -946771200, y: 132165129 }, { x: -631152000, y: 151325798 }, { x: -315619200, y: 179323175 }, { x: 0, y: 203211926 }, { x: 315532800, y: 226545805 }, { x: 631152000, y: 248709873 }, { x: 946684800, y: 281421906 }, { x: 1262304000, y: 308745538 } ], 
-                color: 'steelblue'
-        } ]
-} );
-
-var x_axis = new Rickshaw.Graph.Axis.Time( { graph: graph } );
-
-var y_axis = new Rickshaw.Graph.Axis.Y( {
-        graph: graph,
-        orientation: 'left',
-        tickFormat: Rickshaw.Fixtures.Number.formatKMBT,
-        element: document.getElementById('y_axis'),
-} );
-
-graph.render();
-
-</script>
     <script src="{{ url_for('static', filename = 'js/main.js') }}"></script>
   </body>
 </html>

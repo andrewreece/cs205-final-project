@@ -1,11 +1,12 @@
 body {
 	font-family: Helvetica, Arial, Tahoma;
 	font-size:14pt;
+	color:rgb(125,125,125);
 }
 
 input[type='button'] {
 	-webkit-appearance: button;
-	font-size:14pt;
+	font-size:12pt;
 }
 
 #container-top {
@@ -18,20 +19,17 @@ input[type='button'] {
 #title {
 	width:inherit;
 	display: inherit;
-	height: 80px;
 	font-family: 'Source Sans Pro', Helvetica;
 	color:rgb(110,110,110);
 	font-size:18pt;
-	margin-top:10px;
-	margin-bottom:20px;
+	margin-bottom:10px;
 	padding-left:10px;
 	background-color:rgb(235,235,235);
 }
 
 #intro {
 	width:inherit;
-	display: inherit;
-	height: 100px;
+	display: none;
 	margin-bottom: 20px;
 	padding-left:10px;
 }
@@ -48,7 +46,8 @@ input[type='button'] {
 
 #next-debate-info {
 	margin-top:10px;
-	margin-left:120px;
+	margin-left:60px;
+	margin-bottom:20px;
 	font-size:16pt;
 	font-family: 'Source Sans Pro', Helvetica;
 }
@@ -68,10 +67,10 @@ input[type='button'] {
 		display:block;
 	}
 	#step2 {
-		width:400px;
+		width:500px;
 		display:none;
-		height:300px;
-		border:2px solid green;
+		height:40px;
+		margin-top: 10px;
 	}
 	#step2-body {
 		width:inherit;
@@ -79,7 +78,28 @@ input[type='button'] {
 		height: inherit;
 	}
 
-
+/* BEGIN RICKSHAW */
+#chart_container {
+        display: inline-block;
+        font-family: Arial, Helvetica, sans-serif;
+}
+#chart {
+        float: left;
+}
+#legend {
+        float: left;
+        margin-left: 15px;
+}
+#offset_form {
+        float: left;
+        margin: 2em 0 0 15px;
+        font-size: 13px;
+}
+#y_axis {
+        float: left;
+        width: 40px;
+}
+/* END RICKSHAW */
 
 /* ADMINI PAGE */
 #bake-report {

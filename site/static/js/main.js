@@ -11,6 +11,20 @@ var tnames=['tweets','sentiment']; 	// SDB table names
 var bake_starting_msg = "Starting cluster...stand by for reporting<br />";
 var bake_complete_msg = "CLUSTER IS FULLY BAKED. DATA COMING.";
 
+// from SO: http://stackoverflow.com/questions/610406/javascript-equivalent-to-printf-string-format
+// mimics .format() in python
+if (!String.prototype.format) {
+  String.prototype.format = function() {
+    var args = arguments;
+    return this.replace(/{(\d+)}/g, function(match, number) { 
+      return typeof args[number] != 'undefined'
+        ? args[number]
+        : match
+      ;
+    });
+  };
+}
+
 function startPeeking(cid, interval) {
 	/* Wraps setInterval() loop for checking on cluster status */
 	interval_id = setInterval( 
@@ -163,6 +177,36 @@ $('#terminate-other').click( function() {
 	terminate(cluster_id); 
 } );
 
+
+
+// http://stackoverflow.com/questions/196972/convert-string-to-title-case-with-javascript
+function toTitleCase(str) {
+    return str.replace(/\w\S*/g, function(txt){return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();});
+}
+
+var step2;
+function getPastDebateOptions() {
+	var now = "One moment, loading sentiment tracker...";
+	var past = '2. Choose a debate: ' + '<select id="past-debates">';
+	var options;
+	d3.json('/get_debate_options', function(response) {
+		response.data.forEach( function(d,i) {
+			yr = d.ddate.split("_")[0];
+			mon_name = toTitleCase(d.ddate.split("_")[1]);
+			day = d.ddate.split("_")[2];
+			start_time = d.start_time;
+			end_time = d.end_time;
+			var selected = (i===0) ? "selected" : "";
+			options += '<option id="{0}-{1}" data-start_time="{6}" data-end_time="{7}" value="{0}-{1}" {8}>{2} {3} {4}({5})</option>'.format(d.party,d.ddate,mon_name,day,yr,d.party.toUpperCase(),start_time,end_time,selected);
+		});
+		past += options;
+		past += '</select> '+'<input type="button" id="past-debate-select" value="Start tracking" />';
+	    
+	    step2 = {"now":now,"past": past};
+	});
+}
+
+
 // gets info about upcoming debate
 $(document).ready(function() {
 	d3.csv('/getschedule', function(schedules) {
@@ -209,39 +253,146 @@ $(document).ready(function() {
 		$("#debate-time").html(nearest_debate.time);
 
 	});
+
+	getPastDebateOptions();
+
 });
 
-var past = 'Please choose from the following list of past debates: <br />'+
-            '<select id="past-debates">' +
-                '<option id="gop-sep16" value="gop-sep16">Sept 16 (GOP)</option>'+
-                '<option id="dem-oct13" value="dem-oct13">Oct 13 (DEM)</option>'+
-            '</select> <br /><br />'+
-            '<input type="button" id="past-debate-select" value="Start tracking" />';
-
-var step2 = {"now":"One moment, loading sentiment tracker...","past":past};
-
-console.log(step2);
 
 function updateStep2(content) {
-
 	$('#step2-body').html(content);
-	console.log($('#step2-body').html());
-
 	$('#step2').slideDown("slow");
 }
+
 $('input[name=timeframe]').click( function() {
 	var choice = $('input[name=timeframe]:checked').val();
-	console.log('choice: '+choice);
-
 	if ($('#step2').css('display')!="none") {
-
-		$.when( 
-			$('#step2').slideUp("slow")
-		).done( 
-			function() { updateStep2(step2[choice]); }
-		);
+		$.when( $('#step2').slideUp("slow") )
+		 .done( function() { 
+		 	updateStep2(step2[choice]); 
+		 	console.log(choice);
+		 } );// if not wrapped in anonymous, then starts early
 	} else {
 		updateStep2(step2[choice]);
 	}
 });
 
+
+var palette = new Rickshaw.Color.Palette();
+
+var sentiment_data = {};
+var graphdata = {};
+var fin = false;
+var series = [];
+$('#step2-body').on('click', '#past-debate-select', function() {
+	var target = $('#past-debates').val();
+	var selected = $('#past-debates').find('option:selected');
+	var start_time = selected.data('start_time');
+	var end_time = selected.data('end_time');
+
+	d3.json('/get_debate_data/{0}/{1}'.format(start_time,end_time), function(data) {
+		var ct = 0;
+
+		Object.keys(data.data).forEach( function(d) {
+			var jdata;
+			var candidate_name = d.split("_")[0];
+			var tstamp = d.split("_")[1];
+			
+			if (Object.keys(sentiment_data).indexOf(candidate_name) === -1) {
+				sentiment_data[candidate_name] = {};
+				graphdata[candidate_name] = [];
+			}
+			data.data[d].forEach( function(dd,i) {
+				if (dd.Name == "data") {
+					jdata = JSON.parse(dd.Value.replace(/\bNaN\b/g, "null"));
+				} 
+			});
+			sentiment_data[candidate_name][jdata.timestamp.toString()] = jdata;
+
+			graphdata[candidate_name].push( {"x":tstamp,"y":jdata.sentiment_avg} );
+			
+			
+		});
+		Object.keys(graphdata).forEach( function(cname) {
+			series.push( {"name":cname,"data":graphdata[cname],"color":palette.color()} );
+		});
+		fin = true;
+	});
+
+	var interval_id = setInterval( 
+		function() { 
+			if (fin) { 
+				clearInterval(interval_id); 
+				console.log('all done!'); 
+				console.log(sentiment_data); 
+				console.log(series);
+			} 
+		},
+		300);
+});
+
+
+
+// BEGIN RICKSHAW
+
+
+var graph = new Rickshaw.Graph( {
+        element: document.querySelector("#chart"),
+        width: 540,
+        height: 240,
+        renderer: 'line',
+        series: [
+                {
+                        name: "Northeast",
+                        data: [ { x: -1893456000, y: 25868573 }, { x: -1577923200, y: 29662053 }, { x: -1262304000, y: 34427091 }, { x: -946771200, y: 35976777 }, { x: -631152000, y: 39477986 }, { x: -315619200, y: 44677819 }, { x: 0, y: 49040703 }, { x: 315532800, y: 49135283 }, { x: 631152000, y: 50809229 }, { x: 946684800, y: 53594378 }, { x: 1262304000, y: 55317240 } ],
+                        color: palette.color()
+                },
+                {
+                        name: "Midwest",
+                        data: [ { x: -1893456000, y: 29888542 }, { x: -1577923200, y: 34019792 }, { x: -1262304000, y: 38594100 }, { x: -946771200, y: 40143332 }, { x: -631152000, y: 44460762 }, { x: -315619200, y: 51619139 }, { x: 0, y: 56571663 }, { x: 315532800, y: 58865670 }, { x: 631152000, y: 59668632 }, { x: 946684800, y: 64392776 }, { x: 1262304000, y: 66927001 } ],
+                        color: palette.color()
+                },
+                {
+                        name: "South",
+                        data: [ { x: -1893456000, y: 29389330 }, { x: -1577923200, y: 33125803 }, { x: -1262304000, y: 37857633 }, { x: -946771200, y: 41665901 }, { x: -631152000, y: 47197088 }, { x: -315619200, y: 54973113 }, { x: 0, y: 62795367 }, { x: 315532800, y: 75372362 }, { x: 631152000, y: 85445930 }, { x: 946684800, y: 100236820 }, { x: 1262304000, y: 114555744 } ],
+                        color: palette.color()
+                },
+                {
+                        name: "West",
+                        data: [ { x: -1893456000, y: 7082086 }, { x: -1577923200, y: 9213920 }, { x: -1262304000, y: 12323836 }, { x: -946771200, y: 14379119 }, { x: -631152000, y: 20189962 }, { x: -315619200, y: 28053104 }, { x: 0, y: 34804193 }, { x: 315532800, y: 43172490 }, { x: 631152000, y: 52786082 }, { x: 946684800, y: 63197932 }, { x: 1262304000, y: 71945553 } ],
+                        color: palette.color()
+                }
+        ]
+} );
+
+var x_axis = new Rickshaw.Graph.Axis.Time( { graph: graph } );
+
+var y_axis = new Rickshaw.Graph.Axis.Y( {
+        graph: graph,
+        orientation: 'left',
+        tickFormat: Rickshaw.Fixtures.Number.formatKMBT,
+        element: document.getElementById('y_axis'),
+} );
+
+var legend = new Rickshaw.Graph.Legend( {
+        element: document.querySelector('#legend'),
+        graph: graph
+} );
+
+var offsetForm = document.getElementById('offset_form');
+
+offsetForm.addEventListener('change', function(e) {
+        var offsetMode = e.target.value;
+
+        if (offsetMode == 'lines') {
+                graph.setRenderer('line');
+                graph.offset = 'zero';
+        } else {
+                graph.setRenderer('stack');
+                graph.offset = offsetMode;
+        }       
+        graph.render();
+
+}, false);
+
+graph.render();
