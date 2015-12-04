@@ -1,6 +1,39 @@
-input {
+body {
+	font-family: Helvetica, Arial, Tahoma;
+	font-size:14pt;
+}
+
+input[type='button'] {
 	-webkit-appearance: button;
 	font-size:14pt;
+}
+
+#container-top {
+	margin-top:10px;
+	margin-left:10px;
+	width: 1000px;
+	display:inline-block;
+}
+
+#title {
+	width:inherit;
+	display: inherit;
+	height: 80px;
+	font-family: 'Source Sans Pro', Helvetica;
+	color:rgb(110,110,110);
+	font-size:18pt;
+	margin-top:10px;
+	margin-bottom:20px;
+	padding-left:10px;
+	background-color:rgb(235,235,235);
+}
+
+#intro {
+	width:inherit;
+	display: inherit;
+	height: 100px;
+	margin-bottom: 20px;
+	padding-left:10px;
 }
 
 #tweet, #sentiment {
@@ -13,6 +46,42 @@ input {
 	overflow: scroll;
 }
 
+#next-debate-info {
+	margin-top:10px;
+	margin-left:120px;
+	font-size:16pt;
+	font-family: 'Source Sans Pro', Helvetica;
+}
+
+	#debate-party, #debate-date, #debate-time, #next-debate-when, #time-until-debate {
+		display:inline-block;
+	}
+
+	#debate-party, #debate-date, #debate-time, #time-until-debate {
+		font-weight:900;
+	}
+
+.step {
+	font-size:14pt;
+}
+	#step1 {
+		display:block;
+	}
+	#step2 {
+		width:400px;
+		display:none;
+		height:300px;
+		border:2px solid green;
+	}
+	#step2-body {
+		width:inherit;
+		display: inherit;
+		height: inherit;
+	}
+
+
+
+/* ADMINI PAGE */
 #bake-report {
 	width:500px;
 	display:block;

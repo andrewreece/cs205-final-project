@@ -12,6 +12,8 @@
 	<!-- JQUERY -->
     <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
 
+    <!-- JQUERY PLUGIN Final Countdown (clock) -->
+    <script src="http://andrewgarrettreece.com/nolink/jquery_plugins/jquery.countdown.min.js"></script>
 	<!--JQUERY UI-->
 	<link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.11.3/themes/smoothness/jquery-ui.css">
 	<script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.11.3/jquery-ui.min.js"></script>
@@ -21,51 +23,91 @@
 	<link href='http://fonts.googleapis.com/css?family=Lato:400,700,900,300italic,400italic,700italic' rel='stylesheet' type='text/css'>
 	<link rel="stylesheet" href="{{ url_for('static', filename = 'css/main.css') }}">
 
-
+    <!-- RICKSHAW -->
+    <script src="{{ url_for('static', filename = 'js/rickshaw.min.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename = 'css/rickshaw.min.css') }}">
   <!-- COLOR BREWER -->
   <!--<script src="{{ url_for('static', filename = 'js/colorbrewer.js') }}"></script>-->
-
+<style>
+#chart_container {
+        position: relative;
+        font-family: Arial, Helvetica, sans-serif;
+}
+#chart {
+        position: relative;
+        left: 40px;
+}
+#y_axis {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 40px;
+}
+</style>
   </head>
 
   <body>
-    1. Select time frame: <br />
-        <input type='radio' id='timeframe'> Right now <br />
-        <input type='radio' id='timeframe'> In the past
+  <div id="container-top">
+    <div id="title">Gauging Debate: Tracking Sentiment for 2016 Elections</div>
     
-    <br /><br />
-    2. Select a topic: <br />
-        <!-- IF time frame == 'Right now' -->
-        The next presidential debate starts in <div id="time-until-debate"></div>/is happening now, and started X minutes ago. <br />
-        Do you want to start tracking sentiment for this debate, or do you want to track sentiment for a custom topic? <br />
-        <br /><br />
-        Track sentiment for:<br />
-            <input type='radio' id='timeframe'> This debate <br />
-            <input type='radio' id='timeframe'> Custom topic <br />
-            <input type="button" id="timeframe-select" value="Select" />
-            <br /><br />
-            <!-- 2a. ONLY IF track sentiment for Custom topic -->
-            2a. Choose topic and search terms <br />
-                What is the topic you want to track? <input type='text' size='20'> <br />
-                Enter the search terms you want associated with this topic: <br />
-                    <input type="text" size="20"> <a class="add-topic">+</a>
-                <input type="button" id="terms-enter" value="Enter" />
+    <div id="intro">
+        
+        Main: Track real-time Twitter sentiment on Twitter, or review past debates<br />
+        Experimental: Track sentiment for any topic of your choosing<br />
+        
+    </div>
 
-                To add more search terms, click the + button <br />
-        <br /><br />
-        <!-- IF tame frame = 'In the past' -->
-        Please choose from the following list of past debates: <br />
-        <select id="past-debates">
-            <option id="gop-sep16" value="gop-sep16" />
-            <option id="dem-oct13" value="dem-oct13" />
-        </select> <br />
-        <input type="button" id="past-debate-select" value="Start tracking" />
-            <br /><br />
+    <div id="next-debate-info">
+        The next presidential debate features <div id="debate-party"></div> candidates. <br />
+        It airs on <div id="debate-date"></div>, at <div id="debate-time"></div>. <br />
+        <div id="next-debate-when"></div>
+    </div>
 
-    <script>
-        d3.csv('/getschedule',function(data) {
-            console.log(data);
-        });
-    </script>
+    <div id="tracker-options">
+    Choose from the following options to start up the sentiment tracker: <br /><br />
+
+    <div id="step1">
+        1. Tracking options: <br />
+        <input type="radio" name="timeframe" value="now" >Live Tracking<br />
+        <input type="radio" name="timeframe" value="past">Previous Debate<br />
+    </div>
+    
+    <div id="step2">
+        <div id="step2-body"></div>
+    </div>
+  </div>
+
+  <div id="sentiment-tracker">
+  </div>
+  
+<div id="chart_container">
+        <div id="y_axis"></div>
+        <div id="chart"></div>
+</div>
+<script>
+
+var graph = new Rickshaw.Graph( {
+        element: document.querySelector("#chart"),
+        width: 540,
+        height: 240,
+        series: [ {
+                data: [ { x: -1893456000, y: 92228531 }, { x: -1577923200, y: 106021568 }, { x: -1262304000, y: 123202660 }, { x: -946771200, y: 132165129 }, { x: -631152000, y: 151325798 }, { x: -315619200, y: 179323175 }, { x: 0, y: 203211926 }, { x: 315532800, y: 226545805 }, { x: 631152000, y: 248709873 }, { x: 946684800, y: 281421906 }, { x: 1262304000, y: 308745538 } ], 
+                color: 'steelblue'
+        } ]
+} );
+
+var x_axis = new Rickshaw.Graph.Axis.Time( { graph: graph } );
+
+var y_axis = new Rickshaw.Graph.Axis.Y( {
+        graph: graph,
+        orientation: 'left',
+        tickFormat: Rickshaw.Fixtures.Number.formatKMBT,
+        element: document.getElementById('y_axis'),
+} );
+
+graph.render();
+
+</script>
     <script src="{{ url_for('static', filename = 'js/main.js') }}"></script>
   </body>
 </html>

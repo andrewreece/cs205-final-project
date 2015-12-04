@@ -85,6 +85,7 @@ def check_cluster_status(cid):
 
 ''' Scrape debate schedule and write to file '''
 @app.route('/setschedule')
+@nocache # we need nocache, otherwise these results may cache in some browsers and ignore new data
 def set_schedule():
 	try:
 		utils.set_debate_schedule()
@@ -94,6 +95,7 @@ def set_schedule():
 
 ''' Get current debate schedule on file '''
 @app.route('/getschedule')
+@nocache # we need nocache, otherwise these results may cache in some browsers and ignore new data
 def get_schedule():
 	try:
 		csv = utils.get_debate_schedule()

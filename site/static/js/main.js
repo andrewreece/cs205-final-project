@@ -163,4 +163,85 @@ $('#terminate-other').click( function() {
 	terminate(cluster_id); 
 } );
 
+// gets info about upcoming debate
+$(document).ready(function() {
+	d3.csv('/getschedule', function(schedules) {
+		var today = new Date();
+		var nearest_delta = Infinity;
+		var nearest_debate;
+		schedules.forEach( function(s,i) {
+			var d = new Date(s.datetime);
+			var distance_from_today = d-today;
+			// if nearest is in the past, check to see if it's within 3 hrs of now
+			// 3hrs = 180min = 180000ms
+			// if so, report that debate is currently going on! (and ask if you want to track it)
+			if ( Math.abs(distance_from_today) < nearest_delta ) {
+				if ( (distance_from_today > 0) || (Math.abs(distance_from_today) <= 180000) ) {
+					nearest_delta = distance_from_today;
+					nearest_debate = s;
+				}
+			}
+		});
+		if (nearest_delta <=0) {
+			$("#next-debate-when").html('Is happening now!');
+		} else {
+			$("#next-debate-when").html('It starts in <div id="time-until-debate"></div>.');	
+
+			$("#time-until-debate")
+			   .countdown(new Date(nearest_debate.datetime), function(event) {
+			     $(this).text(
+			       event.strftime('%D days %H hrs %M min %S seconds')
+			     );
+			   });
+		}
+		
+		$("#debate-party").html(nearest_debate.party)
+						  .css("color",function() { 
+						  	if (nearest_debate.party=="Republican") {
+						  		return "red";
+						  	} else if (nearest_debate.party=="Democratic") {
+						  		return "blue";
+						  	} else {
+						  		return "purple";
+						  	}
+						  });
+		$("#debate-date").html(nearest_debate.date);
+		$("#debate-time").html(nearest_debate.time);
+
+	});
+});
+
+var past = 'Please choose from the following list of past debates: <br />'+
+            '<select id="past-debates">' +
+                '<option id="gop-sep16" value="gop-sep16">Sept 16 (GOP)</option>'+
+                '<option id="dem-oct13" value="dem-oct13">Oct 13 (DEM)</option>'+
+            '</select> <br /><br />'+
+            '<input type="button" id="past-debate-select" value="Start tracking" />';
+
+var step2 = {"now":"One moment, loading sentiment tracker...","past":past};
+
+console.log(step2);
+
+function updateStep2(content) {
+
+	$('#step2-body').html(content);
+	console.log($('#step2-body').html());
+
+	$('#step2').slideDown("slow");
+}
+$('input[name=timeframe]').click( function() {
+	var choice = $('input[name=timeframe]:checked').val();
+	console.log('choice: '+choice);
+
+	if ($('#step2').css('display')!="none") {
+
+		$.when( 
+			$('#step2').slideUp("slow")
+		).done( 
+			function() { updateStep2(step2[choice]); }
+		);
+	} else {
+		updateStep2(step2[choice]);
+	}
+});
 
