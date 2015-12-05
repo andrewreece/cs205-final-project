@@ -337,13 +337,9 @@ var t0 = performance.now();
 		legend: legend
 	} );
 
-	$('#chart_container').fadeIn(1000);
-	var t1 = performance.now();
-	console.log("Call to goRickshaw took " + (t1 - t0) + " milliseconds.");
-
-
+var t1 = performance.now();
+console.log("Call to goRickshaw took " + (t1 - t0) + " milliseconds.");
 }
-
 var sentiment_data = {};
 var graphdata = {};
 var fin = false;
@@ -355,15 +351,36 @@ var t0 = performance.now();
 	var target = $('#past-debates').val();
 	var selected = $('#past-debates').find('option:selected');
 	var start_time = selected.data('start_time');
-	var end_time = selected.data('end_time');
+	var final_end_time = selected.data('end_time');
 
 	console.log('start time: '+start_time+', end time: '+end_time);
-	var time_lag = 3000;
-	end_time = start_time + time_lag;
-	d3.json('/get_debate_data/{0}/{1}'.format(start_time,end_time), function(data) {
-		var ct = 0;
+	var time_lag = 600;
+	var time_increment = 30;
+	var current_end_time = start_time + time_lag;
 
-		Object.keys(data.data).forEach( function(d) {
+
+
+//define function to load all pages
+function loadAllData(url, callback) {
+    var data = [];
+    var count = 0; //just for demo
+
+    //define recursive function to process each page
+    function loadNext(urlNext) {
+        console.log('loading page ' + urlNext);
+        
+        d3.json(urlNext, function (error, json) {
+            if (error) {
+                alert("Cannot access data");
+                callback(error); //sends back D3 error object
+                return; //stop executing this function
+            }
+
+            count += json.results.length;
+           
+            console.log(count + ' records loaded');
+
+		Object.keys(json.data).forEach( function(d) {
 			var jdata;
 			var candidate_name = d.split("_")[0];
 			var tstamp = d.split("_")[1];
@@ -387,23 +404,52 @@ var t0 = performance.now();
 		Object.keys(graphdata).forEach( function(cname) {
 			series.push( {"name":cname,"data":graphdata[cname],"color":palette.color()} );
 		});
-		fin = true;
-	});
 
-	var interval_id = setInterval( 
-		function() { 
-			if (fin) { 
-				console.log('all done!'); 
-				//console.log(series); 
-				goRickshaw(series);
 
-				var t1 = performance.now();
-				console.log("Call to d3.json took " + (t1 - t0) + " milliseconds.");
+            var times = urlNext.split("/");
 
-				clearInterval(interval_id); 
-			} 
-		},
-		500);
+            var previous_end_time = times[2];
+            var new_start_time = previous_end_time + time_increment;
+            var current_end_time = ((new_start_time + time_lag) > final_end_time) ? final_end_time : new_start_time + time_lag;
+            var next_url = url +'{0}/{1}'.format(new_start_time,current_end_time);
+            //If there is another page, call loadNext again (recursion)                   
+            if (previous_end_time != current_end_time) {
+                loadNext(next_url);
+            } else {
+                console.log('no more pages to load');
+                fin = true;
+                //execute callback
+                callback(series);
+            }
+        });
+
+    }
+    url = url+'{0}/{1}'.format(start_time,current_end_time);
+    //call recursive function
+    loadNext(url);
+
+}
+
+//call the function to load all pages
+loadAllData('/get_debate_data/', function (allData) {
+    console.log("this will run after the callback has been called");
+    console.log(allData);
+});
+
+	var interval_id = 	setInterval( 
+							function() { 
+								if (fin) { 
+									console.log('all done!'); 
+									//console.log(series); 
+									goRickshaw(series);
+
+									var t1 = performance.now();
+									console.log("Call to d3.json took " + (t1 - t0) + " milliseconds.");
+
+									clearInterval(interval_id); 
+								} 
+							},
+						500);
 });
 
 

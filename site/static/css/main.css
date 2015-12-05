@@ -47,9 +47,10 @@ input[type='button'] {
 #next-debate-info {
 	margin-top:10px;
 	margin-left:60px;
-	margin-bottom:20px;
-	font-size:16pt;
+	margin-bottom:5px;
+	font-size:15pt;
 	font-family: 'Source Sans Pro', Helvetica;
+	display:none;
 }
 
 	#debate-party, #debate-date, #debate-time, #next-debate-when, #time-until-debate {
@@ -64,10 +65,11 @@ input[type='button'] {
 	font-size:14pt;
 }
 	#step1 {
-		display:block;
+		width:450;
+		display:none;
 	}
 	#step2 {
-		width:500px;
+		width:450px;
 		display:none;
 		height:40px;
 		margin-top: 10px;
@@ -80,7 +82,7 @@ input[type='button'] {
 
 /* BEGIN RICKSHAW */
 #chart_container {
-        display: inline-block;
+        display: none;
         font-family: Arial, Helvetica, sans-serif;
 }
 #chart {
