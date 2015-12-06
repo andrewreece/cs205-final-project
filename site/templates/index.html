@@ -14,38 +14,24 @@
 
     <!-- JQUERY PLUGIN Final Countdown (clock) -->
     <script src="http://andrewgarrettreece.com/nolink/jquery_plugins/jquery.countdown.min.js"></script>
-	<!--JQUERY UI-->
-	<link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.11.3/themes/smoothness/jquery-ui.css">
-	<script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.11.3/jquery-ui.min.js"></script>
 
-    <!-- D3 -->
-	<script src="http://d3js.org/d3.v3.min.js"></script>
-	<link href='http://fonts.googleapis.com/css?family=Lato:400,700,900,300italic,400italic,700italic' rel='stylesheet' type='text/css'>
-	<link rel="stylesheet" href="{{ url_for('static', filename = 'css/main.css') }}">
+    <!-- PLOT.LY -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 
-    <!-- RICKSHAW -->
-    <script src="{{ url_for('static', filename = 'js/rickshaw.min.js') }}"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename = 'css/rickshaw.min.css') }}">
+    <!--OBOE-->
+    <script src="{{ url_for('static', filename = 'js/oboe-browser.min.js') }}"></script>
+    
+    <!-- SPINNER -->
+    <script src="http://fgnass.github.io/spin.js/spin.min.js"></script>
 
-    <!--OBOE
-        <script src="{{ url_for('static', filename = 'js/oboe-browser.min.js') }}"></script>
-    -->
-
-  <!-- COLOR BREWER -->
-  <!--<script src="{{ url_for('static', filename = 'js/colorbrewer.js') }}"></script>-->
-
+    <!-- CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename = 'css/main.css') }}">
   </head>
 
   <body>
-  <div id="container-top">
     <div id="title">Gauging Debate: Tracking Sentiment for 2016 Elections</div>
     
-    <div id="intro">
-        
-        Main: Track real-time Twitter sentiment on Twitter, or review past debates<br />
-        Experimental: Track sentiment for any topic of your choosing<br />
-        
-    </div>
+  <div id="container-intro">
 
     <div id="next-debate-info">
         The next presidential debate features <div id="debate-party"></div> candidates. <br />
@@ -53,27 +39,39 @@
         <div id="next-debate-when"></div>
     </div>
 
-    <div id="tracker-options">
+    <div id="steps">
 
-    <div id="step1">
-        1. Tracking options:
-        <input type="radio" name="timeframe" value="now" >Live Tracking 
-        <input type="radio" name="timeframe" value="past">Previous Debate<br />
-    </div>
-    
-    <div id="step2">
-        <div id="step2-body"></div>
+        <div id="step1">
+            1. Tracking options:
+            <input type="radio" name="timeframe" value="now" >
+                <span class="timeframe-text">Live Tracking</span>
+            <input type="radio" name="timeframe" value="past">
+                <span class="timeframe-text">Previous Debate</span>
+        </div>
+
+        <br />
+
+        <div id="step2">
+            <div id="step2-body"></div>
+        </div>
+
     </div>
   </div>
 
-  <div id="sentiment-tracker">
-  </div>
-<!--<input type="button" value="test oboe" id="test-oboe" />Test oboe-->
-<div id="chart_container">
-        <div id="y_axis"></div>
+    <!-- Loading/spinner div (summoned from landing.js on query/pageload) -->
+    <div id="loading"> Loading... </div>
+
+    <!--<input type="button" value="test oboe" id="test-oboe" />Test oboe-->
+
+    <div id="container-chart">
         <div id="chart"></div>
-        <div id="legend"></div>
-</div>
+    </div>
+    <div id="container-instructions">
+        <div id="instructions">
+            Click <a href='#' id='start-time'>here</a> to start time moving.
+            Click the flag to start over. Or just click <a href='#' id='start-over'>here</a>.
+        </div>
+    </div>
     <script src="{{ url_for('static', filename = 'js/main.js') }}"></script>
   </body>
 </html>

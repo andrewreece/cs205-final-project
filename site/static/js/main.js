@@ -1,418 +1,494 @@
 /* GLOBALS */	
-var cluster_id;						// Global so terminate() has access
-var color = "red";					// Toggle, alternates blue/red output on cluster status report (testing only)
-var check_interval = 30000;			// How frequently should we check up on a baking cluster?
-var tweet_interval = 5000;			// How frequently should we pull down new data from SDB?
-var interval_id, interval_id2;		// setInterval IDs (we need these to stop them)
-var table_name = "tweettest";		// SDB table name (we may end up having more than one for LDA, sentiment, etc)
-var ct = 0;							// ct and max_ct keep track of how many tweets we've displayed in our output
-var max_ct = 40;					// "" ""
-var tnames=['tweets','sentiment']; 	// SDB table names 
-var bake_starting_msg = "Starting cluster...stand by for reporting<br />";
-var bake_complete_msg = "CLUSTER IS FULLY BAKED. DATA COMING.";
 
-// from SO: http://stackoverflow.com/questions/610406/javascript-equivalent-to-printf-string-format
-// mimics .format() in python
+var doPrint = false; // for testing
+var spinner; // for the spinner object
+var layout; // plot.ly layout
+var step2; // allows for toggle of past/present chart configuration
+var past_options_set = false; // listener for when to reveal the step1 div
+var full_data_loaded = false;
+var closure = true; // for starting and stopping time
+var default_starting_score = 7.0; // for series with no zero-point data, this is an arbitrary starting point
+var views = { // for toggling between intro and chart views
+			 "intro-view": "#container-intro",
+			 "chart-view": "#container-chart"
+			};
+
+
+/* HELPER FUNCTIONS */
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+// FUNCTION: startSpinner(where)
+// ARGS: 	 where: String object, spinner can load either mid-page or over step3 div
+// PURPOSE:  displays #loading div, spinner animation during AJAX queries
+//
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
+function startSpinner(where) {
+
+	// see: http://fgnass.github.io/spin.js/
+	var opts = {"loading": 	{
+								lines: 13, // The number of lines to draw
+								length: 20, // The length of each line
+								width: 10, // The line thickness
+								radius: 30, // The radius of the inner circle
+								corners: 1, // Corner roundness (0..1)
+								rotate: 0, // The rotation offset
+								direction: 1, // 1: clockwise, -1: counterclockwise
+								color: '#5287B3', // #rgb or #rrggbb or array of colors
+								speed: 1, // Rounds per second
+								trail: 60, // Afterglow percentage
+								shadow: false, // Whether to render a shadow
+								hwaccel: false, // Whether to use hardware acceleration
+								className: 'spinner', // The CSS class to assign to the spinner
+								zIndex: 2e9, // The z-index (defaults to 2000000000)
+								top: '80%', // Top position relative to parent
+								left: '50%' // Left position relative to parent
+							},
+				"tiny-loading": {
+								lines:9,
+								length:7,
+								width:3,
+								radius:10,
+								scale:0.45,
+								corners:1.0,
+							  	color: '#5287B3', // #rgb or #rrggbb or array of colors
+								opacity:0.25,
+								rotate:0,
+								direction:1,
+								speed:1.0,
+								trail:60,
+							    zIndex: 2e9, // The z-index (defaults to 2000000000)
+							    top: '80%', // Top position relative to parent
+							    left: '0%' // Left position relative to parent
+							}
+				};
+
+	$('#'+where).fadeIn();
+
+	var target = document.getElementById(where);
+    spinner = new Spinner(opts[where]).spin(target); 
+
+}
+
+
+/* 	This isn't really a helper function, but a mod on the String prototype.
+	It allows for .format() style string concatenation, a la Python.  It's awesome.
+	From: http://stackoverflow.com/questions/610406/javascript-equivalent-to-printf-string-format
+*/
 if (!String.prototype.format) {
   String.prototype.format = function() {
     var args = arguments;
     return this.replace(/{(\d+)}/g, function(match, number) { 
-      return typeof args[number] != 'undefined'
-        ? args[number]
-        : match
-      ;
+      return typeof args[number] != 'undefined' ? args[number] : match ;
     });
   };
 }
 
-function startPeeking(cid, interval) {
-	/* Wraps setInterval() loop for checking on cluster status */
-	interval_id = setInterval( 
-					function() { ovenPeek(cid); }, 
-					interval ); // We need interval_id to stop loop
-}
-
-function bake(interval) {
-	/* Spin up a new cluster, then initiate status check loop 
-	   Note: /bake hits run.py, returns json status.  See run.py documentation for more.
-	*/
-	d3.json('/bake', function(data) {
-		$('#bake-report').html( bake_starting_msg );
-		cluster_id = data.Cluster.Id;
-		startPeeking(cluster_id, interval); 
-	});
-}
-
-function ovenPeek(cid) {
-	/* Periodically check on currently-baking cluster, report on status */
-		// testing
-		// console.log('cid: '+cid);
-
-	// /checkcluster hits run.py, see run.py for more
-	d3.json('/checkcluster/'+cid, function(data) {
-
-		// If RUNNING: May see old data for the first few returns, as new data hasn't gone to DB yet.
-		// If WAITING: Should see only new data, cluster jobs have completed.
-		if ((data.status=="WAITING") || (data.status=="RUNNING")) {
-
-			getData(tnames); 		// pull down SDB data
-			clearInterval(interval_id);	// stop cluster status check loop
-
-			// Print "all done" status
-			$('#bake-report').html( $('#bake-report').html()+"<br /><br />"+bake_complete_msg );
-
-		// If NOT (RUNNING OR WAITING): Cluster is still starting up, report status and keep looping
-		} else {
-
-			$('#bake-report').html( function(d) { 
-
-				color = (color == "red") ? "blue" : "red"; // Toggle print colors, no good reason
-				span_front = "<br /><span style='color:"+color+";'>";
-				span_back  = "</span>";
-				new_html   = span_front + JSON.stringify(data) + span_back;
-				return $('#bake-report').html()+new_html; 
-			});
-		}
-	});
-}
-
-function getData(table_names) {
-	/* Pulls data down from SDB, via Flask
-			- Hits run.py, see run.py for more
-			- Currently returns unprocessed tweets (only a bit of field filtering from Spark)
-		This in mainly the output funciton for the initial PoC...we'll replace this soon.
-		Note: ct, max_ct, tweet_interval are globals!
-	*/
-	$('#tweet').html("Working backwards from latest:<br />");
-	interval_id2 = setInterval(  // We need interval_id2 to stop loop
-		function() { 
-
-			// max_ct is an arbitrary number, determines how many tweets to display as output
-			if (ct < max_ct) {
-
-				ct++;
-				console.log('/pull/'+table_names[0]);
-				console.log('/pull/'+table_names[1]);
-				d3.json('/pull/'+table_names[0], function(error,data) {
-					console.log(data);
-					var data_len = d3.entries(data).length;
-					var ix = data_len - 1;
-					var new_html = "<br /><br />"+JSON.stringify(d3.entries(data)[ix].value);
-					d3.select("#tweet").html( $('#tweet').html()+new_html );
-				});
-
-				d3.json('/pull/'+table_names[1], function(error,data) {
-					var data_len = d3.entries(data).length;
-					var ix = data_len - 1;
-					var new_html = "<br /><br />"+JSON.stringify(d3.entries(data)[ix].value);
-					d3.select("#sentiment").html( $('#sentiment').html()+new_html );
-				});
-			// If we reach maximum number of test outputs, stop the loop, reset ct
-			} else {
-
-				clearInterval(interval_id2);
-				console.log('stopping tweet pull');	
-				ct = 0;
-			}
-		}, 
-		tweet_interval); // How frequently should we check the database?
-	
-}
-
-function display(d,back) {
-	/* Once we start using D3, we may want to wrap our more complex display commands in a function 
-		( Currently we just do all our output writes in getData() )
-	*/
-
-	//console.log(Object.keys(d));
-	/*
-	d3.selectAll(".tweet")
-		.data(d3.entries(d))
-		.enter()
-		.append("div")
-			.attr("class","tweet")
-			.style("width","500px")
-			.style("height","100px")
-			.style("display",function(d,i) { if (i==(data_len-2)) {return "block";} else {return "none";}})
-			.style("border","solid 2px maroon")
-			.text( function(d,i) { return JSON.stringify(d.value); });
-	*/
-}
-
-function terminate(cid) {
-	/* Terminate EMR cluster (need cluster ID) */
-	d3.text( '/terminate/'+cid, function(data) {
-		// test output to console
-		console.log(data);
-		$('#terminate-report').text(JSON.stringify(data));
-	});
-}
-
-
-
-
-/* 
-	Below are HTML containers with onclick triggers to make things happen 
-*/
-
-// Get data from SDB
-$('#pull').click( function() { $('#tweet').html("One moment <br />"); getData(tnames); } );
-
-// Start a new cluster
-$('#bake').click( function() { bake(check_interval); } );
-
-// Check on an existing cluster
-$('#already-baking-check').click( function() { 
-	cluster_id = $('#cid').val(); // This button requires an ID to work properly. No error handling yet!
-	$('#bake-report').text("Just a moment!...checking");
-	startPeeking(cluster_id, check_interval);
-} );
-
-// Terminate current cluster
-$('#terminate').click( function() { terminate(cluster_id); } );
-
-// Terminate different cluster
-$('#terminate-other').click( function() { 
-	cluster_id = $('#terminate-cid').val();
-	terminate(cluster_id); 
-} );
-
-
-
-// http://stackoverflow.com/questions/196972/convert-string-to-title-case-with-javascript
 function toTitleCase(str) {
+/* 	Converts first letter of a string to uppercase
+	http://stackoverflow.com/questions/196972/convert-string-to-title-case-with-javascript
+*/
     return str.replace(/\w\S*/g, function(txt){return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();});
 }
 
-var step2;
+/* END HELPER FUNCTIONS */
+
+
+
+
+/* LAYOUT (NON-CHART) FUNCTIONS */
+
 function getPastDebateOptions() {
 	var now = "One moment, loading sentiment tracker...";
 	var past = '2. Choose a debate: ' + '<select id="past-debates">';
 	var options;
+
 	d3.json('/get_debate_options', function(response) {
+
 		response.data.forEach( function(d,i) {
+
 			yr = d.ddate.split("_")[0];
 			mon_name = toTitleCase(d.ddate.split("_")[1]);
 			day = d.ddate.split("_")[2];
-			start_time = d.start_time;
-			end_time = d.end_time;
+
 			var selected = (i===0) ? "selected" : "";
-			options += '<option id="{0}-{1}" data-start_time="{6}" data-end_time="{7}" value="{0}-{1}" {8}>{2} {3} {4} ({5})</option>'.format(d.party,d.ddate,mon_name,day,yr,d.party.toUpperCase(),start_time,end_time,selected);
+
+			options += '<option id="{0}-{1}" data-date="{1}" data-party="{0}" data-start_time="{6}" data-end_time="{7}" value="{0}-{1}" {8}>{2} {3} {4} ({5})</option>'.format(d.party,d.ddate,mon_name,day,yr,d.party.toUpperCase(),d.start_time,d.end_time,selected);
 		});
 		past += options;
 		past += '</select> '+'<input type="button" id="past-debate-select" value="Start tracking" />';
 	    
 	    step2 = {"now":now,"past": past};
+
+	    past_options_set = true;
 	});
 }
 
-step1_set = false;
 
-// gets info about upcoming debate
-$(document).ready(function() {
-	d3.csv('/getschedule', function(schedules) {
-		var today = new Date();
-		var nearest_delta = Infinity;
-		var nearest_debate;
-		schedules.forEach( function(s,i) {
-			var d = new Date(s.datetime);
-			var distance_from_today = d-today;
-			// if nearest is in the past, check to see if it's within 3 hrs of now
-			// 3hrs = 180min = 180000ms
-			// if so, report that debate is currently going on! (and ask if you want to track it)
-			if ( Math.abs(distance_from_today) < nearest_delta ) {
-				if ( (distance_from_today > 0) || (Math.abs(distance_from_today) <= 180000) ) {
-					nearest_delta = distance_from_today;
-					nearest_debate = s;
-				}
+function getNearest(schedules,today) {
+
+	function updateNearest(schedule,distance_from_today, nearest_delta, nearest_debate) {
+		// if nearest is in the past, check to see if it's within 3 hrs of now
+		// 3hrs = 180min = 180000ms
+		// if so, report that debate is currently going on! (and ask if you want to track it)
+		var three_hours = 180000;
+		if ( Math.abs(distance_from_today) < nearest_delta ) {
+			if ( (distance_from_today > 0) || (Math.abs(distance_from_today) <= three_hours) ) {
+				nearest_delta = distance_from_today;
+				nearest_debate = schedule;
 			}
-		});
-		if (nearest_delta <=0) {
-			$("#next-debate-when").html('Is happening now!');
-		} else {
-			$("#next-debate-when").html('It starts in <div id="time-until-debate"></div>.');	
-
-			$("#time-until-debate")
-			   .countdown(new Date(nearest_debate.datetime), function(event) {
-			     $(this).text(
-			       event.strftime('%D days %H hrs %M min %S seconds')
-			     );
-			   });
 		}
-		
-		$("#debate-party").html(nearest_debate.party)
-						  .css("color",function() { 
-						  	if (nearest_debate.party=="Republican") {
-						  		return "red";
-						  	} else if (nearest_debate.party=="Democratic") {
-						  		return "blue";
-						  	} else {
-						  		return "purple";
-						  	}
-						  });
-		$("#debate-date").html(nearest_debate.date);
-		$("#debate-time").html(nearest_debate.time);
+		return [nearest_delta,nearest_debate];
+	}
 
-		$('#next-debate-info').slideDown("slow"); 
-		 var timeout_id = setTimeout(function() {
-		 								$('#step1').slideDown("slow");
-		 								step1_set = true;
-		 								clearTimeout(timeout_id);
-		 							}, 600);
-		 
+	var nearest_delta = Infinity;
+	var nearest_debate;
+
+	schedules.forEach( function(schedule,i) {
+
+		var this_debate_date 	= new Date(schedule.datetime);
+		var distance_from_today = this_debate_date - today;
+		tmp = updateNearest(schedule, distance_from_today, nearest_delta, nearest_debate);
+		nearest_delta  = tmp[0];
+		nearest_debate = tmp[1];
 	});
 
-	getPastDebateOptions();
-
-});
-
-
-function updateStep2(content) {
-	$('#step2-body').html(content);
-	$('#step2').slideDown("slow");
+	return [nearest_delta, nearest_debate];
 }
 
-$('input[name=timeframe]').click( function() {
-	var choice = $('input[name=timeframe]:checked').val();
+
+function updateNextDebateDiv(nearest_delta,nearest_debate) {
+
+	function getPartyColor(party) {
+	  	if (party=="Republican") 		{ return "red"; 	} 
+	  	else if (party=="Democratic") 	{ return "blue"; 	} 
+	  	else 							{ return "purple"; 	}
+	}
+
+
+	if (nearest_delta <=0) {
+			$("#next-debate-when").html('Is happening now!');
+	} else {
+		$("#next-debate-when").html('It starts in <div id="time-until-debate"></div>.');	
+
+		$("#time-until-debate")
+		   .countdown(new Date(nearest_debate.datetime), function(event) {
+		     $(this).text(
+		       event.strftime('%D days %H hrs %M min %S seconds')
+		     );
+		   });
+	}
+
+	$("#debate-party").html(nearest_debate.party)
+					  .css("color", getPartyColor(nearest_debate.party) );
+
+	$("#debate-date").html(nearest_debate.date);
+	$("#debate-time").html(nearest_debate.time);
+
+	$('#next-debate-info').fadeIn("slow"); 
+	$('#steps').css('display','block');
+}
+
+
+function revealStep1() {
+	var interval_id = setInterval(
+						function() {
+							if (past_options_set) {
+								$('#step1').slideDown("slow");
+								clearInterval(interval_id);
+							}
+						}, 200);
+}
+
+
+function updateOnTimeframeChange(choice) {
+
+	function updateStep2(content) {
+		$('#step2-body').html(content);
+		$('#step2').slideDown("slow");
+	}
+
 	if ($('#step2').css('display')!="none") {
 		$.when( $('#step2').slideUp("slow") )
-		 .done( function() { 
-		 	updateStep2(step2[choice]); 
-		 	console.log(choice);
-		 } );// if not wrapped in anonymous, then starts early
+		 .done( function() {  updateStep2(step2[choice]); } );
 	} else {
 		updateStep2(step2[choice]);
 	}
-});
-
-
-var palette = new Rickshaw.Color.Palette();
-
-function goRickshaw(series) {
-var t0 = performance.now();
-
-	var graph = new Rickshaw.Graph( {
-	        element: document.querySelector("#chart"),
-	        width: 640,
-	        height: 380,
-	        renderer: 'line',
-	        series: series,
-	        min:6,
-	        max:9
-	} );
-
-	var x_axis = new Rickshaw.Graph.Axis.Time( { 
-		graph: graph,
-		timeFixture: new Rickshaw.Fixtures.Time.Local(),
-		orientation: 'bottom'
-	} );
-
-	x_axis.render();
-
-	var y_axis = new Rickshaw.Graph.Axis.Y( {
-	        graph: graph,
-	        orientation: 'left',
-	        tickFormat: Rickshaw.Fixtures.Number.formatKMBT,
-	        element: document.getElementById('y_axis')
-	} );
-	y_axis.render();
-
-	var legend = new Rickshaw.Graph.Legend( {
-	        element: document.querySelector('#legend'),
-	        graph: graph
-	} );
-
-	var offsetForm = document.getElementById('offset_form');
-
-	graph.render();
-
-
-	var hoverDetail = new Rickshaw.Graph.HoverDetail( {
-		graph: graph,
-		xFormatter: function(x) { return new Date(x*1000).toLocaleString(); }
-	} );
-
-	var shelving = new Rickshaw.Graph.Behavior.Series.Toggle( {
-		graph: graph,
-		legend: legend
-	} );
-
-	$('#chart_container').fadeIn(1000);
-	var t1 = performance.now();
-	console.log("Call to goRickshaw took " + (t1 - t0) + " milliseconds.");
-
-
 }
 
-var sentiment_data = {};
-var graphdata = {};
-var fin = false;
-var series = [];
 
-$('#step2-body').on('click', '#past-debate-select', function() {
+function swapViews(prev,next) {
+	$(views[prev]).fadeToggle("slow");
+	$(views[next]).fadeToggle("slow");
+}
 
-var t0 = performance.now();
-	var target = $('#past-debates').val();
+
+/* END LAYOUT FUNCTIONS */
+
+
+/* PLOTTING FUNCTIONS */
+
+function goChart(graph_data) {
+
 	var selected = $('#past-debates').find('option:selected');
-	var start_time = selected.data('start_time');
-	var end_time = selected.data('end_time');
+	var party    = selected.data('party');
+	var date     = selected.data('date');
 
-	console.log('start time: '+start_time+', end time: '+end_time);
-	var time_lag = 3000;
-	end_time = start_time + time_lag;
-	d3.json('/get_debate_data/{0}/{1}'.format(start_time,end_time), function(data) {
-		var ct = 0;
+	var yr, mon, day;  tmp = date.split("_");  yr = tmp[0];  mon = tmp[1];  day = tmp[2];
 
-		Object.keys(data.data).forEach( function(d) {
-			var jdata;
-			var candidate_name = d.split("_")[0];
-			var tstamp = d.split("_")[1];
-			
-			if (Object.keys(sentiment_data).indexOf(candidate_name) === -1) {
-				sentiment_data[candidate_name] = {};
-				graphdata[candidate_name] = [];
+	layout = {
+	  title: 'Twitter sentiment: {0} {1} {2} {3} debate'.format( toTitleCase(mon),day,yr,party.toUpperCase() ),
+	  titlefont: {size:24,color:'rgb(57,136,234)'},
+	  margin: {t:100},
+	  dragmode: "pan",
+	  xaxis: {title:"Time (30 second intervals)",type:"date",showgrid:false},
+	  yaxis: {title:"Average Tweet Happiness"}
+	};
+
+	Plotly.newPlot('chart', graph_data, layout, {displaylogo: false, scrollZoom: true});
+	
+	var $moredata = $('<div>', {'id':'more-data-coming'} );
+	$moredata.css({'position':'absolute',
+					'top':$('#chart').offset().top+60,
+					'margin-left': 'auto',
+					'margin-right': 'auto',
+					'left':0,
+					'right':0,
+					'width':500,
+					'height':35,
+					'z-index':2000,
+					'display':'inline-block',
+					'font-size':'11pt',
+					'color':'rgb(193,35,35)'
+				  });
+	var tinyload = "<div id='tiny-loading' style='position:relative;z-index:2001;width:20px;height:20px;display:inline-block;margin-left:15px;'></div>";
+	var moredata_text = "More data is on its way! For now, feel free to explore what's here. ";
+	$moredata.html(moredata_text+tinyload);
+
+	$('#chart').append($moredata);
+
+	startSpinner('tiny-loading');
+}
+
+
+function extractFeatures(rawdata, tmp, getrange) {
+
+	var rangemin =  Infinity;
+	var rangemax = -Infinity;
+
+	Object.keys(rawdata.data).forEach( function(d,i) {
+
+		var json, tstamp, candidate_name;
+
+		rawdata.data[d].forEach( function(dd,i) {
+			if (dd.Name == "data") {
+				json = JSON.parse(dd.Value.replace(/\bNaN\b/g, "null"));
+			} else if (dd.Name == "timestamp") {
+				tstamp = dd.Value;
+				if (getrange) {
+					if (parseInt(tstamp) < rangemin) { rangemin = parseInt(tstamp); }
+					if (parseInt(tstamp) > rangemax) { rangemax = parseInt(tstamp); }
+				}
+			} else if (dd.Name == "candidate") {
+				candidate_name = dd.Value;
 			}
-			data.data[d].forEach( function(dd,i) {
-				if (dd.Name == "data") {
-					jdata = JSON.parse(dd.Value.replace(/\bNaN\b/g, "null"));
-				} 
-			});
-			sentiment_data[candidate_name][jdata.timestamp.toString()] = jdata;
-			//console.log(tstamp);
-			//var x_val = new Date(parseInt(tstamp)*1000);
-			//console.log(x_val);
-			graphdata[candidate_name].push( {"x":parseInt(tstamp),"y":jdata.sentiment_avg} );
-			
 		});
-		Object.keys(graphdata).forEach( function(cname) {
-			series.push( {"name":cname,"data":graphdata[cname],"color":palette.color()} );
-		});
-		fin = true;
+
+		if (Object.keys(tmp).indexOf(candidate_name) === -1) {
+			tmp[candidate_name] = {};
+			tmp[candidate_name].x = [];
+			tmp[candidate_name].y = [];
+		}
+
+		var millisecond_tstamp = parseInt(tstamp)*1000;
+		tmp[candidate_name].x.push( millisecond_tstamp );
+
+		var sentiment_score = (i===0) ? default_starting_score : json.sentiment_avg;
+		tmp[candidate_name].y.push( sentiment_score );
 	});
 
-	var interval_id = setInterval( 
-		function() { 
-			if (fin) { 
-				console.log('all done!'); 
-				//console.log(series); 
-				goRickshaw(series);
-
-				var t1 = performance.now();
-				console.log("Call to d3.json took " + (t1 - t0) + " milliseconds.");
-
-				clearInterval(interval_id); 
-			} 
-		},
-		500);
-});
+	if (getrange) { return [rangemin, rangemax]; }
+}
 
 
-/*
-$('#test-oboe').click(function() {
-	oboe('/get_debate_data/1442446200/1442460600')
-		.node('*', function(d) {
-			console.log(d);
+function buildChartSeries(tmpdata,master) {
+
+	Object.keys(tmpdata).forEach( function(cname) {
+		master.push( 
+			{ 	"name": 		cname,
+			  	"x": 			tmpdata[cname].x,
+			  	"y": 			tmpdata[cname].y,
+			  	"type": 		"scatter",
+			  	"connectgaps": 	true 
+			});
 		});
-});
-*/
+}
 
+
+function goOboe(start,end) {
+
+	var oboe_graphdata 	= {};
+	var oboe_series 	= [];
+	var oboe_temp 		= { "data":{} };
+	var json_file 		= '/get_debate_data/{0}/{1}'.format(start,end);
+	var ct 		 = 0;
+
+	oboe(json_file)
+		.node( '*', 
+				function(d) {
+
+					if ($.isArray(d))  {
+						oboe_temp.data[ct.toString()] = d;
+						ct++;
+					}
+				}
+		)
+
+		.done(	
+			function() {
+				console.log('done oboe');
+				tmp = extractFeatures(oboe_temp, oboe_graphdata,true);
+				var rangemin = tmp[0];
+				var rangemax = tmp[1];
+				buildChartSeries( oboe_graphdata, oboe_series );
+
+				chart.data = oboe_series;
+				chart.layout.xaxis.range = [rangemin,rangemax];
+
+				spinner.stop();
+
+				$('#more-data-coming').html('Data has arrived!').css({'padding-left':100}).delay(1000).fadeOut(200);
+
+				Plotly.redraw(chart); 
+
+				full_data_loaded = true;
+			}
+		);
+}
+
+
+function movingUpdate() {
+
+	var intid = setInterval( 
+
+		function() {
+
+			if (!closure) {
+				console.log('no closure, shifting graph');
+				Object.keys(chart.data).forEach( function(k) {
+					console.log('before length:'+chart.data[k].x.length);
+					chart.data[k].x.shift();
+					console.log('after length:'+chart.data[k].x.length);
+					chart.data[k].y.shift();
+				});
+
+				console.log('redrawing now!');
+				Plotly.redraw(chart);
+			} else {
+				console.log('clearing movingupdate interval now');
+				clearInterval(intid);
+			}
+		}, 1000
+	);
+}
+
+function loadChartData(selected) {
+
+	var start_time 	 	= selected.data('start_time');
+	var end_time 	 	= selected.data('end_time');
+	var initial_span  	= 1200;
+	var init_end_time  	= start_time + initial_span;
+	var json_file		= '/get_debate_data/{0}/{1}'.format(start_time,init_end_time);
+
+	console.log('start time: '+start_time+', end time: '+end_time);
+	$('#container-intro').fadeTo(300,0.1);
+	startSpinner('loading');
+
+	d3.json(json_file, function(rawdata) {
+		
+		var d3_graphdata = {};
+		var d3_series 	 = [];
+
+		extractFeatures(rawdata, d3_graphdata, false);
+
+		buildChartSeries(d3_graphdata,d3_series);
+
+		spinner.stop();
+        $("#loading").fadeToggle(200);
+        $('#container-intro').fadeTo(100,1.0);
+		goChart(d3_series);
+		swapViews("intro-view","chart-view");
+	});
+
+	goOboe(start_time,end_time);
+}
+
+/* END PLOTTING FUNCTIONS */
+
+
+/* BEGIN EVENT LISTENERS */
+
+/* SETUP: On page load, get info about next upcoming debate, reveal options */
+$(document).ready(function() {
+
+	$homelink = $('a',{'href':'http://gaugingdebate.com'});
+	$homelink.css(
+		{  'position':'absolute',
+			'display':'block',
+			'top':$('#title').offset().top,
+			'left':$('#title').offset().left,
+			'width':'30px',
+			'height':'30px',
+			'cursor':'pointer'
+		});
+	d3.csv(	'/getschedule', 
+
+			function(schedules) {
+
+				var today = new Date();
+
+				getPastDebateOptions();
+
+				tmp = getNearest(schedules,today);
+				var nearest_delta = tmp[0];
+				var nearest_debate = tmp[1];
+
+				updateNextDebateDiv(nearest_delta, nearest_debate);
+
+				revealStep1();
+			}
+	);
+});
+
+/* 	STEP 1: User selects streaming or archived charts */
+$('input[name=timeframe]')
+	.click( 
+		function() {
+			updateOnTimeframeChange( $(this).val() );
+		}
+	);
+
+
+/* 	STEP 2: IF User choose archived charts, then User selects a specific debate
+
+	NOTE: Here we listen for #past-debate-select click, NOT for #step2-body click!
+	it's a 'deferred' assignment, as #past-debate-select does not exist on page load.
+	(this is the way to assign click events to dynamically created elements with jQuery)
+	for more see: http://stackoverflow.com/questions/6658752/click-event-doesnt-work-on-dynamically-generated-elements 
+*/
+$('#step2-body')
+	.on('click', '#past-debate-select', 
+		function() {
+			var selected = $('#past-debates').find('option:selected');
+			loadChartData(selected);
+		}
+	);
+
+$('#start-time').click(
+	function() { closure = (closure) ? false : true; movingUpdate(closure); }
+);
+
+$('#start-over').click(
+	function() { swapViews("chart-view","intro-view"); }
+);
