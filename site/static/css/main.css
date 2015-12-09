@@ -114,21 +114,41 @@ input[type='button'] {
 	z-index:3000;
 }
 
-#container-instructions {
-	position:absolute;
-	width:100%;
+.more-data-coming {
+	position:relative;
+	margin-left:15px;
+	width:500;
+	height:35;
+	z-index:2000;
 	display:inline-block;
-	height:40px;
-	bottom:30px;
+	font-size:11pt;
+	color:rgb(193,35,35);
 }
-#instructions {
-	margin-left: auto;
-	margin-right: auto;
-	left:  0;
-	right: 0;
-	width:90%;
-	height:30px;
-	text-align:center;
+
+	#tiny-loading {
+		position:relative;
+		width:20px;
+		height:20px;
+		display:inline-block;
+		margin-left:15px;
+		z-index:2001;
+	}
+
+#container-controls {
+	position:absolute;
+	width:350px;
+	display:none;
+	height:100px;
+	left:10px;
+	bottom:50px;
+	background:lightgray;
+	border: 1px solid gray;
 }
+	#chart-controls {
+		height:30px;
+		text-align:left;
+		margin-left:10px;
+		margin-top:5px;
+	}
 
 

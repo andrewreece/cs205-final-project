@@ -66,10 +66,11 @@
     <div id="container-chart">
         <div id="chart"></div>
     </div>
-    <div id="container-instructions">
-        <div id="instructions">
-            Click <a href='#' id='start-time'>here</a> to start time moving.
-            Click the flag to start over. Or just click <a href='#' id='start-over'>here</a>.
+    <div id="container-controls">
+        <div id="chart-controls">
+            <input type="checkbox" id="error-bar-toggle" checked> Show error bars 
+            <br />
+            <a href='#' id='start-over'>Go back to startup options</a>.
         </div>
     </div>
     <script src="{{ url_for('static', filename = 'js/main.js') }}"></script>

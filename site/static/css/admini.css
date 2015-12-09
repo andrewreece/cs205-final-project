@@ -28,7 +28,7 @@ body {
 		margin-left:30px;
 	}
 
-		#default-master-type, #default-core-type, #default-pricing-type, #default-duration {
+		.default {
 			color:rgba(128,0,0,.6);
 		}
 

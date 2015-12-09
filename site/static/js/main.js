@@ -11,6 +11,11 @@ var closure = true; // for starting and stopping time
 var default_starting_score = 7.0; // for series with no zero-point data, this is an arbitrary starting point
 var onload_now = new Date();
 var maximum_time_span = 4; // in the live streaming case, how many hours from now to keep pulling data?
+var rounding_interval = 30; // round timestamps to interval floor. eg. interval=30, 8:30:28 --> 8:30:00
+var master_chart_data = []; // keeps track of growing chart data in the streaming case
+var every_N_milliseconds = 30000;
+var timezone_offset = new Date().getTimezoneOffset()*60*1000;
+var fetch_round = 0; // tracks number of times from initial request we've fetched data. resets on new request.
 var final_end_time   = onload_now.setHours(onload_now.getHours()+maximum_time_span);
 var views = { // for toggling between intro and chart views
 			 "intro-view": "#container-intro",
@@ -19,6 +24,11 @@ var views = { // for toggling between intro and chart views
 
 
 /* HELPER FUNCTIONS */
+
+
+function roundToTwo(num) {    
+    return +(Math.round(num + "e+2")  + "e-2");
+}
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -197,8 +207,14 @@ function updateNextDebateDiv(nearest_delta,nearest_debate) {
 	} else {
 		$("#next-debate-when").html('It starts in <div id="time-until-debate"></div>.');	
 
+		console.log('nearest debate datetime:');
+		console.log(nearest_debate.datetime);
+
+		var debate_date_obj = new Date(nearest_debate.datetime);
+		debate_date_obj.setMilliseconds(debate_date_obj.getMilliseconds() + timezone_offset);
+
 		$("#time-until-debate")
-		   .countdown(new Date(nearest_debate.datetime), function(event) {
+		   .countdown( debate_date_obj, function(event) {
 		     $(this).text(
 		       event.strftime('%D days %H hrs %M min %S seconds')
 		     );
@@ -221,10 +237,6 @@ function updateOnTimeframeChange(choice) {
 	function updateStep2(content) {
 		$('#step2-body').html(content);
 		$('#step2').slideDown("slow");
-		if (ready_indicator) {
-
-			loadChartData({},"now");
-		}
 	}
 
 	if ($('#step2').css('display')!="none") {
@@ -238,7 +250,8 @@ function updateOnTimeframeChange(choice) {
 
 function swapViews(prev,next) {
 	$(views[prev]).fadeToggle("slow");
-	$(views[next]).fadeToggle("slow");
+	setTimeout( function() { $(views[next]).fadeToggle("slow"); }, 1000);
+	$('#container-controls').fadeToggle("slow");
 }
 
 
@@ -247,50 +260,79 @@ function swapViews(prev,next) {
 
 /* PLOTTING FUNCTIONS */
 
-function goChart(graph_data) {
+function showDataComingMsg() {
+	var tinyload, moredata_text;
+	tinyload = "<div id='tiny-loading'></div>";
+	moredata_text = "More data is on its way! For now, feel free to explore what's here. ";
 
-	var selected = $('#past-debates').find('option:selected');
-	var party    = selected.data('party');
-	var date     = selected.data('date');
+	console.log('fetch round: '+fetch_round);
+	console.log('more data coming element:');
+	console.log($('#more-data-coming'));
+	console.log($('#more-data-coming').length);
+	if ($('#more-data-coming').length == 0) {
+		$moredata = $('<div>', {'id':'more-data-coming'} );
+		$moredata.addClass('more-data-coming');
+		$moredata.css('top',$('#chart').offset().top+60);
+		$moredata.html(moredata_text+tinyload);
+		$('#chart').append($moredata);
+	} else {
+		tinyload = "<div id='tiny-loading'></div>";
+		moredata_text = "More data is on its way! For now, feel free to explore what's here. ";
+		$('#more-data-coming').html(moredata_text+tinyload);
+		$('#more-data-coming').show();
+	}
 
-	var yr, mon, day;  tmp = date.split("_");  yr = tmp[0];  mon = tmp[1];  day = tmp[2];
+}
 
-	layout = {
-	  title: 'Twitter sentiment: {0} {1} {2} {3} debate'.format( toTitleCase(mon),day,yr,party.toUpperCase() ),
-	  titlefont: {size:24,color:'rgb(57,136,234)'},
-	  margin: {t:100},
-	  dragmode: "pan",
-	  xaxis: {title:"Time (30 second intervals)",type:"date",showgrid:false},
-	  yaxis: {title:"Average Tweet Happiness"}
-	};
+function goChart(graph_data,timeframe) {
 
-	Plotly.newPlot('chart', graph_data, layout, {displaylogo: false, scrollZoom: true});
+	var chart_title;
+
+	if (timeframe=="past") {
+
+		var selected = $('#past-debates').find('option:selected');
+		var party    = selected.data('party');
+		var date     = selected.data('date');
+		var yr, mon, day;  
+		var tmp = date.split("_");  
+		yr = tmp[0];  mon = tmp[1];  day = tmp[2];
+
+		chart_title = 'Twitter sentiment: {0} {1} {2} {3} debate'.format( toTitleCase(mon),day,yr,party.toUpperCase() );
 	
-	var $moredata = $('<div>', {'id':'more-data-coming'} );
-	$moredata.css({'position':'absolute',
-					'top':$('#chart').offset().top+60,
-					'margin-left': 'auto',
-					'margin-right': 'auto',
-					'left':0,
-					'right':0,
-					'width':500,
-					'height':35,
-					'z-index':2000,
-					'display':'inline-block',
-					'font-size':'11pt',
-					'color':'rgb(193,35,35)'
-				  });
-	var tinyload = "<div id='tiny-loading' style='position:relative;z-index:2001;width:20px;height:20px;display:inline-block;margin-left:15px;'></div>";
-	var moredata_text = "More data is on its way! For now, feel free to explore what's here. ";
-	$moredata.html(moredata_text+tinyload);
+	} else if (timeframe=="now") {
 
-	$('#chart').append($moredata);
+		chart_title = 'Twitter sentiment live stream (updates every {0} seconds)'.format(rounding_interval);
+	}
 
-	startSpinner('tiny-loading');
+	var chart_layout = {  title: chart_title,
+						  titlefont: { 	
+						  				size:24,
+						  				color:'rgb(57,136,234)'
+						  			 },
+						  margin: { t:100 },
+						  dragmode: "pan",
+						  xaxis: { 	title:"Time ({0} second intervals)".format(rounding_interval),
+						  			type:"date",
+						  			showgrid:false
+						  		 },
+						  yaxis: { title:"Average Tweet Happiness" }
+					   };
+
+	var chart_config = { displaylogo: false, 
+						 scrollZoom:  true
+					   };
+
+	Plotly.newPlot('chart', graph_data, chart_layout, chart_config);
+	
+	if (timeframe=="past") {
+		showDataComingMsg();
+		startSpinner('tiny-loading');
+	}
+
 }
 
 
-function extractFeatures(rawdata, tmp, getrange) {
+function extractFeatures(rawdata, tmp, getrange, timeframe) {
 
 	var rangemin =  Infinity;
 	var rangemax = -Infinity;
@@ -320,14 +362,29 @@ function extractFeatures(rawdata, tmp, getrange) {
 			tmp[candidate_name].std = [];
 		}
 
+		
+		/* BAD HACK ALERT!
+
+			You discovered a day before this project was due that your streaming data is storing
+			non-offsetted timestamps (meaning it shows up in GMT not EST), but your archival data
+			stores offsetted timestamps.  That means that if you apply the timezone_offset to all 
+			data, it will show the correct (EST) time for streaming but not for archives.
+
+			Currently, you have sloppily solved this with the below conditional statement.
+			What you really need to do is go back into the Spark Streaming code and get the
+			right timestamp stored when you write to SDB.
+
+		*/
+		var offset = (timeframe=="now") ? timezone_offset : 0;
+
 		var millisecond_tstamp = parseInt(tstamp)*1000;
-		tmp[candidate_name].x.push( millisecond_tstamp );
+		tmp[candidate_name].x.push( millisecond_tstamp + offset);
 
-		var sentiment_score = (i===0) ? default_starting_score : json.sentiment_avg;
-		tmp[candidate_name].y.push( sentiment_score );
+		var sentiment_score = (json.sentiment_avg > 0) ? json.sentiment_avg :  default_starting_score;
+		tmp[candidate_name].y.push( roundToTwo(sentiment_score) );
 
-		var sentiment_std = (i===0) ? 0 : json.sentiment_std;
-		tmp[candidate_name].std.push( sentiment_std );
+		var sentiment_std = (json.sentiment_std > 0) ? json.sentiment_std : NaN;
+		tmp[candidate_name].std.push( roundToTwo(sentiment_std) );
 	});
 
 	if (getrange) { return [rangemin, rangemax]; }
@@ -343,7 +400,7 @@ function buildChartSeries(tmpdata,master) {
 			  	"y": 			tmpdata[cname].y,
 				"error_y": {
 							    type: 'data',
-							    array: tmpdata[cname].std,
+							    array: (tmpdata[cname].std) ? tmpdata[cname].std : [0],
 							    visible: true
 				},
 			  	"type": 		"scatter",
@@ -386,8 +443,12 @@ function getFullData(start,end) {
 				spinner.stop();
 
 				$('#more-data-coming').html('Data has arrived!').css({'padding-left':100}).delay(1000).fadeOut(200);
+				$('#more-data-coming').hide();
+
+				master_chart_data = oboe_series;
 
 				Plotly.redraw(chart); 
+				$('#error-bar-toggle').prop('checked', true);
 
 				full_data_loaded = true;
 			}
@@ -395,33 +456,48 @@ function getFullData(start,end) {
 }
 
 
-function movingUpdate() {
+function updateMasterSeries(master,fresh) {
 
-	var intid = setInterval( 
+	//console.log('this is fresh');
+	//console.log(fresh);
 
-		function() {
+	if (master.length > 0) {
 
-			if (!closure) {
-				console.log('no closure, shifting graph');
-				Object.keys(chart.data).forEach( function(k) {
-					console.log('before length:'+chart.data[k].x.length);
-					chart.data[k].x.shift();
-					console.log('after length:'+chart.data[k].x.length);
-					chart.data[k].y.shift();
-				});
+		//console.log('this is master');
+		//console.log(master);
 
-				console.log('redrawing now!');
-				Plotly.redraw(chart);
-			} else {
-				console.log('clearing movingupdate interval now');
-				clearInterval(intid);
+		fresh.forEach( function(cand_data) {
+			var found = false;
+			master_chart_data.forEach( function(mdata,i) {
+				//console.log('i: '+i);
+				//console.log('mdata:');
+				//console.log(mdata);
+				if (mdata.name==cand_data.name) {
+					master_chart_data[i].x.push.apply(mdata.x, cand_data.x);
+					master_chart_data[i].y.push.apply(mdata.y, cand_data.y);
+					master_chart_data[i].error_y.array.push.apply(mdata.error_y.array, cand_data.error_y.array);
+					found = true;
+				}  
+			});
+
+			if ( (!found) && (!isNaN(cand_data.y[0])) ) {
+				console.log('new name found, here is cand_data.y[0]');
+				console.log(cand_data.y[0]);
+				//console.log('here is current master chart data:');
+				//console.log(master_chart_data);
+				var tmpdata = {};
+				tmpdata[cand_data.name] = cand_data;
+				buildChartSeries(tmpdata,master_chart_data);
 			}
-		}, 1000
-	);
+		});
+
+	} else { // initial assignment
+		master_chart_data = fresh;
+	}
 }
 
 
-function getInitialData(json_file) {
+function getDebateData(json_file,timeframe) {
 	d3.json(json_file, function(rawdata) {
 		
 		var d3_graphdata = {};
@@ -429,23 +505,41 @@ function getInitialData(json_file) {
 
 		extractFeatures(rawdata, d3_graphdata, false);
 		buildChartSeries(d3_graphdata,d3_series);
+		updateMasterSeries(master_chart_data,d3_series);
 
-		spinner.stop();
-        $("#loading").fadeToggle(200);
-        $('#container-intro').fadeTo(100,1.0);
-		goChart(d3_series);
-		swapViews("intro-view","chart-view");
+	    if (fetch_round==1) {
+	    	spinner.stop();
+	    	$("#loading").fadeOut(200);
+		}
+		goChart(master_chart_data,timeframe);
+
+		if (fetch_round==1) {
+	        $('#container-intro').fadeTo(100,1.0);
+			swapViews("intro-view","chart-view");
+		}
 	});
 }
 
 
 function loadChartData(obj,timeframe) {
+	/* Note: obj is not the same data type, depending on whether it's coming from a request for
+			 streaming or archived data. If archived, it's the DOM <option> object of the debate date selected.
+			 If streaming, it's a date object. 
+			 This is not particularly good form. But since there is no equivalent of a select object to pass in
+			 in the streaming case, we were faced with either passing in an empty dict, so, same data type but
+			 empty content, or passing in a different data type with useful information.
+			 There's probably a better way to go about doing this.
+	*/
 	var start_time, end_time;
+	if (fetch_round) { fetch_round=0; }
 
 	$('#container-intro').fadeTo(300,0.1);
 	startSpinner('loading');
 
 	if (timeframe=="past") {
+
+		fetch_round++;
+
 		start_time = obj.data('start_time');
 		end_time   = obj.data('end_time');
 		console.log('start time: '+start_time+', end time: '+end_time);
@@ -454,35 +548,54 @@ function loadChartData(obj,timeframe) {
 		var init_end_time  	= start_time + initial_span;
 		var json_file		= '/get_debate_data/{0}/{1}'.format(start_time,init_end_time);
 
-		getInitialData(json_file);
+		getDebateData(json_file,timeframe);
 		getFullData(start_time,end_time);
 
 	} else if (timeframe=="now") {
 
+		var original_start = new Date();
+		//end_time_secs = obj.setHours(obj.getHours()+maximum_time_span) / 1000;
+		var maxiumum_minute_span = 10;
+
+		obj.setMinutes(obj.getMinutes()+maxiumum_minute_span);
+		var end_time_secs = Math.floor( (obj.getTime() - obj.getTimezoneOffset()*60*1000) / 1000 );
+
 		var interval_id = setInterval( 
 			function() {
 
+				fetch_round++;
+
 				var now = new Date();
-				start_time = now.getTime() + now.getTimezoneOffset()*60*1000;
+				var sec = now.getSeconds();
+				var floor_sec = Math.floor( sec / rounding_interval ) * rounding_interval;
+				start_time_milli = now.setSeconds(floor_sec);
+				start_time_secs = Math.floor( (now.getTime() - now.getTimezoneOffset()*60*1000) / 1000 );
+				start_time_oneback = start_time_secs - rounding_interval; // get previous N second interval of data
 
-				/*
+				if (start_time_secs < end_time_secs) {
+					//console.log('original start time: '+original_start);
+					//console.log('start time: '+new Date(start_time_milli)+' end time: '+new Date(end_time_secs*1000));
+					//console.log('start time secs: '+start_time_secs+', end time milli: '+end_time_secs);
+					console.log('still in loop!');
 
-				PICKING UP FROM 08 DEC:
 
-					You need to set this start_time as the floor in the seconds column to the 
-					nearest 30 second mark. (Eg. 28 seconds --> 00 seconds)
+					// for testing only!
+					//start_time_oneback = 1442444460+rounding_interval*fetch_round;
+					
+					console.log('this is start_time_oneback: '+start_time_oneback);
 
-					Then use that as the timestamp selector in your pull from SDB. 
+					var json_file = '/get_debate_data/{0}/{1}'.format(start_time_oneback,0);
 
-					Set the interval to query the db again every 30 seconds, and append the data
-					to the existing chart series, and redraw.
+					getDebateData(json_file,timeframe);
 
-				*/
-
-				end_time   = now.setHours(now.getHours()+maximum_time_span);
-				console.log('start time: '+start_time+', end time: '+end_time);
-
-			}, 3000);
+				} else {
+					console.log('original start time: '+original_start);
+					console.log('start time: '+new Date(start_time_milli)+' end time: '+new Date(end_time_secs*1000));
+					console.log('start time secs: '+start_time_secs+', end time secs: '+end_time_secs);
+					console.log('closing loop now.');
+					clearInterval(interval_id);
+				}
+			}, every_N_milliseconds);
 	}
 
 }
@@ -544,7 +657,14 @@ $('#step2-body')
 	.on('click', '#past-debate-select', 
 		function() {
 			var selected = $('#past-debates').find('option:selected');
-			loadChartData(selected);
+			loadChartData(selected,"past");
+		}
+	);
+
+$('#step2-body')
+	.on('click', '#start-live-tracking',
+		function() {
+			loadChartData(new Date(),"now");
 		}
 	);
 
@@ -553,5 +673,21 @@ $('#start-time').click(
 );
 
 $('#start-over').click(
-	function() { swapViews("chart-view","intro-view"); }
+	function() { 
+		master_chart_data = [];
+		swapViews("chart-view","intro-view"); 
+		$('#error-bar-toggle').prop('checked', true);
+		//$('error-bar-toggle').attr('checked', 'checked');
+	}
 );
+
+$('#error-bar-toggle').click(
+	function() {
+		var show_bars = this.checked;
+		master_chart_data.forEach( function(d,i) {
+			master_chart_data[i].error_y.visible = show_bars;
+		});
+		chart.data = master_chart_data;
+		Plotly.redraw(chart);
+	}
+	);

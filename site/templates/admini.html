@@ -38,16 +38,23 @@
     <div id="default-settings-container">
     Default settings: <br />
         <div id="default-settings">
-            Master type: <span id="default-master-type">c3.xlarge</span> <br />
-            Core type: <span id="default-core-type">m1.medium</span> <br />
-            Pricing: <span id="default-pricing-type">spot pricing</span> <br />
-            Tweet stream will stay open for <span id="default-duration"></span> minutes. <br />
+            Political Party Tracked: <span class="default">GOP</span> <br />
+            Master type: <span class="default">c3.xlarge</span> <br />
+            Core type: <span class="default">m1.medium</span> <br />
+            Pricing: <span class="default">spot pricing</span> <br />
+            Tweet stream will stay open for <span class="default"></span> minutes. <br />
         </div>
         <input type="checkbox" id="change-defaults" /> Change settings
     </div>
 
         <div id="update-settings">
 
+            Political party to track: 
+                <select id="party-tracked">
+                    <option value="gop" selected>GOP</option>
+                    <option value="dem">Democrats</option>
+                </select>
+                
             Tweet stream stays open for: <select id="stream-duration"></select> 
             <br />
 

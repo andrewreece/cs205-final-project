@@ -118,14 +118,15 @@ def gd_cluster_running(cluster_name="gaugingdebate"):
 		if len(clusters) == 0:
 			return "0_There are no sentiment trackers currently running.<br /> \
 					(If you have administrator privileges and want to start a tracker, <br />\
-					go to the administrator dashboard to get one started.)"
+					go to the administrator dashboard to get one started.)<br /> \
+					<input type='button' id='override-live-tracking' value='Try Tracking Anyway'>"
 		
 		elif ( ('RUNNING' not in states) and ('WAITING' not in states) ):
 			return "0_A sentiment tracker is currently starting up. It takes about 15 minutes to start up \
 					a tracker, please try back soon."
 		
 		else:
-			return "1_Tracker found, loading data now..."
+			return "1_Sentiment tracker found! <input type='button' id='start-live-tracking' value='Start Tracking'>..."
 
 	except Exception, e:
 		return str(e)
@@ -163,7 +164,13 @@ def get_debate_data(start,end):
 	try:
 		client  = boto3.client('sdb')
 		paginator = client.get_paginator('select')
-		query = 'SELECT * FROM sentiment WHERE timestamp BETWEEN "{}" AND "{}"'.format(start,end)
+		if int(end) > 0: 
+
+			query = 'SELECT * FROM sentiment WHERE timestamp BETWEEN "{}" AND "{}"'.format(start,end)
+
+		else:
+			query = 'SELECT * FROM sentiment WHERE timestamp="{}"'.format(start)
+
 		output = {}
 			
 		response = paginator.paginate( SelectExpression=query, ConsistentRead=True )
@@ -175,7 +182,7 @@ def get_debate_data(start,end):
 
 		return jsonify({"data":output})
 	except Exception,e:
-		return str(e)
+		return str(e)+" "+query
 
 
 ''' Scrape debate schedule and write to file '''
