@@ -1,0 +1,71 @@
+
+
+/* ADMINI PAGE */
+body {
+	font-family: 'futura-pt', Helvetica, Arial, Tahoma;
+	font-size:14pt;
+	color:rgb(125,125,125);
+}
+
+#intro {
+	margin-top:20px;
+	margin-left:10px;
+	margin-bottom:30px;
+	color:steelblue;
+	font-size:12pt;
+	width:1000px;
+	display:block;
+}
+
+#default-settings-container {
+	display:block;
+	width:700px;
+	font-family: consolas, sans serif;
+}
+
+	#default-settings {
+		margin-top:5px;
+		margin-left:30px;
+	}
+
+		#default-master-type, #default-core-type, #default-pricing-type, #default-duration {
+			color:rgba(128,0,0,.6);
+		}
+
+
+#update-settings {
+	display:none;
+	width:650px;	
+	margin-top:10px;
+	margin-left:20px;
+	padding:5px;
+	border:1px solid steelblue;
+}
+
+#bake-report {
+	width:500px;
+	display:block;
+	height:200px;
+	font-family:consolas;
+	border: solid 2px red;
+	overflow:scroll;
+}
+
+#terminate-report {
+	width:500px;
+	display:block;
+	height:40px;
+	font-family:consolas;
+	border: solid 2px gray;
+}
+
+
+#tweet, #sentiment {
+	width:600px;
+	display:block;
+	height:200px;
+	font-family:consolas;
+	border: solid 2px steelblue;
+	background-color: lightgray;
+	overflow: scroll;
+}

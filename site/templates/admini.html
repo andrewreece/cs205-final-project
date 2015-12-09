@@ -7,29 +7,67 @@
     <!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
 
 
-    <title>Gauging Debate - Real-time Sentiment Analysis of 2016 Presidential Debates</title>
+    <title>[ADMIN] Gauging Debate</title>
 
 	<!-- JQUERY -->
     <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
 
-	<!--JQUERY UI-->
-	<link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.11.3/themes/smoothness/jquery-ui.css">
-	<script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.11.3/jquery-ui.min.js"></script>
-
+    <!-- UNDERSCORE -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.8.3/underscore-min.js"></script>
+    
     <!-- D3 -->
 	<script src="http://d3js.org/d3.v3.min.js"></script>
-	<link href='http://fonts.googleapis.com/css?family=Lato:400,700,900,300italic,400italic,700italic' rel='stylesheet' type='text/css'>
-	<link rel="stylesheet" href="{{ url_for('static', filename = 'css/main.css') }}">
 
-
-  <!-- COLOR BREWER -->
-  <!--<script src="{{ url_for('static', filename = 'js/colorbrewer.js') }}"></script>-->
+	<link rel="stylesheet" href="{{ url_for('static', filename = 'css/admini.css') }}">
 
   </head>
 
   <body>
-    <input type="button" id="bake" value="Bake a new cluster">
+    
+    <div id="intro">
+    Here you can start an AWS cluster for tweet tracking on GaugingDebate.com.<br />
+    If you want to use the default settings (see below), just click "Bake a new cluster".<br />
+    Otherwise, select "Change Settings", make adjustments, and then click "Bake a new cluster". 
     <br /><br />
+    You will see regular updates (every 30s) in the red box, informing you of the cluster status. <br />
+    When the cluster is up and running, tweets will display in the blue box under 'Get tweets'. <br />
+    At that point, return to the <a href="http://gaugingdebate.com">main page</a> to interact with 
+    the streaming output. 
+    </div>
+
+    <div id="default-settings-container">
+    Default settings: <br />
+        <div id="default-settings">
+            Master type: <span id="default-master-type">c3.xlarge</span> <br />
+            Core type: <span id="default-core-type">m1.medium</span> <br />
+            Pricing: <span id="default-pricing-type">spot pricing</span> <br />
+            Tweet stream will stay open for <span id="default-duration"></span> minutes. <br />
+        </div>
+        <input type="checkbox" id="change-defaults" /> Change settings
+    </div>
+
+        <div id="update-settings">
+
+            Tweet stream stays open for: <select id="stream-duration"></select> 
+            <br />
+
+            Master instance type: <select id="master-type"></select> <br />
+            Master spot pricing or on-demand? 
+                <input type="radio" name="master-pricing" value="spot" checked>Spot Pricing
+                <input type="radio" name="master-pricing" value="demand" disabled>On-Demand
+            <br />
+            
+            Core instance type: <select id="core-type"></select><br />
+            Core spot pricing or on-demand? 
+                <input type="radio" name="core-pricing" value="spot" checked>Spot Pricing
+                <input type="radio" name="core-pricing" value="demand" disabled>On-Demand
+        </div>
+
+    <br />
+
+    <input type="button" id="bake" value="Bake a new cluster"> <br /><br />
+
+
     or...to check up on something already baking, enter cluster ID: 
       <input id="cid" type="text" size="20"> 
       <input type="button" id="already-baking-check" value="Check on this cluster">
@@ -46,13 +84,12 @@
     
     <br /><br />
 
-    <div id="content"><input type="button" id="pull" value="Get Tweets"></div>
-    <br />
+    Streaming tweets will show up here when cluster is done baking.
     <div id="tweet"></div>
     <br /><br />
-    Sentiment Output
+    Sentiment Output (experimental) - This may or may not do something.
     <div id="sentiment"></div>
     
-    <script src="{{ url_for('static', filename = 'js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename = 'js/admini.js') }}"></script>
   </body>
 </html>

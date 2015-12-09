@@ -7,6 +7,9 @@ var table_name = "tweettest";		// SDB table name (we may end up having more than
 var ct = 0;							// ct and max_ct keep track of how many tweets we've displayed in our output
 var max_ct = 40;					// "" ""
 var tnames=['tweets','sentiment']; 	// SDB table names 
+var master_type = 'c3_xlarge'; 		// Argument to bake/ for adjusting EMR master node type
+var core_type   = 'm1_medium';		// Argument to bake/ for adjusting EMR core node type
+var stream_duration = 30;			// Argument to bake/ for adjusting how long the stream stays open
 var bake_starting_msg = "Starting cluster...stand by for reporting<br />";
 var bake_complete_msg = "CLUSTER IS FULLY BAKED. DATA COMING.";
 
@@ -18,21 +21,32 @@ function startPeeking(cid, interval) {
 					interval ); // We need interval_id to stop loop
 }
 
-function bake(interval) {
+function bake(interval,mtype,ctype,sduration) {
 	/* Spin up a new cluster, then initiate status check loop 
 	   Note: /bake hits run.py, returns json status.  See run.py documentation for more.
 	*/
-	d3.json('/bake', function(data) {
+	if (mtype === null) { mtype = '_'; }
+	if (ctype === null) { ctype = '_'; }
+
+	var path = '/bake/'+mtype+'/'+ctype+'/'+sduration;
+
+	console.log(path);
+	d3.json(path, function(data) {
+		console.log(data);
+		console.log((typeof data));
 		$('#bake-report').html( bake_starting_msg );
-		cluster_id = data.Cluster.Id;
-		startPeeking(cluster_id, interval); 
+		if (data === null) {
+			alert("You can't use this kind of instance type in an EMR cluster. Restarting...");
+			location.reload();
+		} else {
+			cluster_id = data.Cluster.Id;
+			startPeeking(cluster_id, interval); 
+		}
 	});
 }
 
 function ovenPeek(cid) {
 	/* Periodically check on currently-baking cluster, report on status */
-		// testing
-		// console.log('cid: '+cid);
 
 	// /checkcluster hits run.py, see run.py for more
 	d3.json('/checkcluster/'+cid, function(data) {
@@ -123,11 +137,37 @@ function terminate(cid) {
 	Below are HTML containers with onclick triggers to make things happen 
 */
 
+$('#change-defaults').change(
+
+	function() {
+		console.log(this.checked);
+		if (this.checked) {
+			$('#update-settings').slideDown();
+		} else {
+			$('#update-settings').slideUp();
+		}
+	}
+);
+
+
+$('#master-type').change( function() {
+	master_type = $(this).val().replace(".","_");
+});
+
+
+$('#core-type').change( function() {
+	core_type = this.val().replace(".","_");
+});
+
+$('#stream-duration').change(function() {
+	stream_duration = this.val();
+});
+
 // Get data from SDB
 $('#pull').click( function() { $('#tweet').html("One moment <br />"); getData(tnames); } );
 
 // Start a new cluster
-$('#bake').click( function() { bake(check_interval); } );
+$('#bake').click( function() { bake(check_interval,master_type,core_type); } );
 
 // Check on an existing cluster
 $('#already-baking-check').click( function() { 
@@ -144,3 +184,51 @@ $('#terminate-other').click( function() {
 	cluster_id = $('#terminate-cid').val();
 	terminate(cluster_id); 
 } );
+
+
+/* ONLOAD SETUP */
+$(document).ready(function() {
+
+	// get instance types from text file, load into dropdown box options
+	var path = '/static/js/instance-types.txt';
+	var options = {"null":"Instance type"};
+
+	d3.text(path, function(data) {
+		var arr = data.split(",");
+		arr.forEach( function(d) {
+			options[d]=d;
+		});
+		var $mtype = $('#master-type');
+		var $ctype = $('#core-type');
+
+		$.each(options, function(key, value) {   
+		     $mtype.append($("<option/>", {
+		         value:key,
+		         text:value
+		     }));
+		     $ctype.append($("<option/>", {
+		         value:key,
+		         text:value
+		     }));
+		});	
+	});
+
+	var $duration = $('#stream-duration');
+	var mins = _.range(5,250,5); // 5 to 245 min (~4hr max)
+	
+	d3.text('/get_duration', function(val) {
+		var default_duration = val;
+
+		$('#default-duration').text(default_duration);
+
+		$.each(mins, function(i,min) {   
+		     $duration.append($("<option/>", {
+		         value:min,
+		         text:min+" min",
+		         selected: function() { if (min==default_duration) {return true;} else { return false; } }
+		     }));
+		 });
+	});
+	
+});
+

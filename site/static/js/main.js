@@ -6,8 +6,12 @@ var layout; // plot.ly layout
 var step2; // allows for toggle of past/present chart configuration
 var past_options_set = false; // listener for when to reveal the step1 div
 var full_data_loaded = false;
+var ready_indicator; // set from call to gd_cluster_running/, indicates whether live data is ready to go
 var closure = true; // for starting and stopping time
 var default_starting_score = 7.0; // for series with no zero-point data, this is an arbitrary starting point
+var onload_now = new Date();
+var maximum_time_span = 4; // in the live streaming case, how many hours from now to keep pulling data?
+var final_end_time   = onload_now.setHours(onload_now.getHours()+maximum_time_span);
 var views = { // for toggling between intro and chart views
 			 "intro-view": "#container-intro",
 			 "chart-view": "#container-chart"
@@ -100,29 +104,50 @@ function toTitleCase(str) {
 /* LAYOUT (NON-CHART) FUNCTIONS */
 
 function getPastDebateOptions() {
-	var now = "One moment, loading sentiment tracker...";
-	var past = '2. Choose a debate: ' + '<select id="past-debates">';
-	var options;
 
-	d3.json('/get_debate_options', function(response) {
+	d3.text('/gd_cluster_running', function(raw_now_response) {
+		var now_response;
 
-		response.data.forEach( function(d,i) {
+		var tmp = raw_now_response.split("_");
+		ready_indicator = tmp[0]; // this is a global variable
+		now_response    = tmp[1];
 
-			yr = d.ddate.split("_")[0];
-			mon_name = toTitleCase(d.ddate.split("_")[1]);
-			day = d.ddate.split("_")[2];
+		var now = "<div style='text-align:left;align:left;font-size:12pt;padding-left:20px;'>"+now_response+"</div>";
 
-			var selected = (i===0) ? "selected" : "";
+		var past = '2. Choose a debate: ' + '<select id="past-debates">';
+		var options;
 
-			options += '<option id="{0}-{1}" data-date="{1}" data-party="{0}" data-start_time="{6}" data-end_time="{7}" value="{0}-{1}" {8}>{2} {3} {4} ({5})</option>'.format(d.party,d.ddate,mon_name,day,yr,d.party.toUpperCase(),d.start_time,d.end_time,selected);
+		d3.json('/get_debate_options', function(response) {
+
+			response.data.forEach( function(d,i) {
+
+				yr = d.ddate.split("_")[0];
+				mon_name = toTitleCase(d.ddate.split("_")[1]);
+				day = d.ddate.split("_")[2];
+
+				var selected = (i===0) ? "selected" : "";
+
+				options += '<option id="{0}-{1}" data-date="{1}" data-party="{0}" data-start_time="{6}" data-end_time="{7}" value="{0}-{1}" {8}>{2} {3} {4} ({5})</option>'.format(d.party,d.ddate,mon_name,day,yr,d.party.toUpperCase(),d.start_time,d.end_time,selected);
+			});
+			past += options;
+			past += '</select> '+'<input type="button" id="past-debate-select" value="Start tracking" />';
+		    
+		    step2 = {"now":now,"past": past};
+
+		    past_options_set = true;
 		});
-		past += options;
-		past += '</select> '+'<input type="button" id="past-debate-select" value="Start tracking" />';
-	    
-	    step2 = {"now":now,"past": past};
-
-	    past_options_set = true;
 	});
+}
+
+
+function revealStep1() {
+	var interval_id = setInterval(
+						function() {
+							if (past_options_set) {
+								$('#step1').slideDown("slow");
+								clearInterval(interval_id);
+							}
+						}, 200);
 }
 
 
@@ -191,22 +216,15 @@ function updateNextDebateDiv(nearest_delta,nearest_debate) {
 }
 
 
-function revealStep1() {
-	var interval_id = setInterval(
-						function() {
-							if (past_options_set) {
-								$('#step1').slideDown("slow");
-								clearInterval(interval_id);
-							}
-						}, 200);
-}
-
-
 function updateOnTimeframeChange(choice) {
 
 	function updateStep2(content) {
 		$('#step2-body').html(content);
 		$('#step2').slideDown("slow");
+		if (ready_indicator) {
+
+			loadChartData({},"now");
+		}
 	}
 
 	if ($('#step2').css('display')!="none") {
@@ -299,6 +317,7 @@ function extractFeatures(rawdata, tmp, getrange) {
 			tmp[candidate_name] = {};
 			tmp[candidate_name].x = [];
 			tmp[candidate_name].y = [];
+			tmp[candidate_name].std = [];
 		}
 
 		var millisecond_tstamp = parseInt(tstamp)*1000;
@@ -306,6 +325,9 @@ function extractFeatures(rawdata, tmp, getrange) {
 
 		var sentiment_score = (i===0) ? default_starting_score : json.sentiment_avg;
 		tmp[candidate_name].y.push( sentiment_score );
+
+		var sentiment_std = (i===0) ? 0 : json.sentiment_std;
+		tmp[candidate_name].std.push( sentiment_std );
 	});
 
 	if (getrange) { return [rangemin, rangemax]; }
@@ -319,6 +341,11 @@ function buildChartSeries(tmpdata,master) {
 			{ 	"name": 		cname,
 			  	"x": 			tmpdata[cname].x,
 			  	"y": 			tmpdata[cname].y,
+				"error_y": {
+							    type: 'data',
+							    array: tmpdata[cname].std,
+							    visible: true
+				},
 			  	"type": 		"scatter",
 			  	"connectgaps": 	true 
 			});
@@ -326,7 +353,7 @@ function buildChartSeries(tmpdata,master) {
 }
 
 
-function goOboe(start,end) {
+function getFullData(start,end) {
 
 	var oboe_graphdata 	= {};
 	var oboe_series 	= [];
@@ -393,25 +420,14 @@ function movingUpdate() {
 	);
 }
 
-function loadChartData(selected) {
 
-	var start_time 	 	= selected.data('start_time');
-	var end_time 	 	= selected.data('end_time');
-	var initial_span  	= 1200;
-	var init_end_time  	= start_time + initial_span;
-	var json_file		= '/get_debate_data/{0}/{1}'.format(start_time,init_end_time);
-
-	console.log('start time: '+start_time+', end time: '+end_time);
-	$('#container-intro').fadeTo(300,0.1);
-	startSpinner('loading');
-
+function getInitialData(json_file) {
 	d3.json(json_file, function(rawdata) {
 		
 		var d3_graphdata = {};
 		var d3_series 	 = [];
 
 		extractFeatures(rawdata, d3_graphdata, false);
-
 		buildChartSeries(d3_graphdata,d3_series);
 
 		spinner.stop();
@@ -420,8 +436,55 @@ function loadChartData(selected) {
 		goChart(d3_series);
 		swapViews("intro-view","chart-view");
 	});
+}
 
-	goOboe(start_time,end_time);
+
+function loadChartData(obj,timeframe) {
+	var start_time, end_time;
+
+	$('#container-intro').fadeTo(300,0.1);
+	startSpinner('loading');
+
+	if (timeframe=="past") {
+		start_time = obj.data('start_time');
+		end_time   = obj.data('end_time');
+		console.log('start time: '+start_time+', end time: '+end_time);
+
+		var initial_span  	= 1200;
+		var init_end_time  	= start_time + initial_span;
+		var json_file		= '/get_debate_data/{0}/{1}'.format(start_time,init_end_time);
+
+		getInitialData(json_file);
+		getFullData(start_time,end_time);
+
+	} else if (timeframe=="now") {
+
+		var interval_id = setInterval( 
+			function() {
+
+				var now = new Date();
+				start_time = now.getTime() + now.getTimezoneOffset()*60*1000;
+
+				/*
+
+				PICKING UP FROM 08 DEC:
+
+					You need to set this start_time as the floor in the seconds column to the 
+					nearest 30 second mark. (Eg. 28 seconds --> 00 seconds)
+
+					Then use that as the timestamp selector in your pull from SDB. 
+
+					Set the interval to query the db again every 30 seconds, and append the data
+					to the existing chart series, and redraw.
+
+				*/
+
+				end_time   = now.setHours(now.getHours()+maximum_time_span);
+				console.log('start time: '+start_time+', end time: '+end_time);
+
+			}, 3000);
+	}
+
 }
 
 /* END PLOTTING FUNCTIONS */

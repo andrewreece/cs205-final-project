@@ -7,11 +7,13 @@ import urllib, datetime, time, json, sys, boto3
 import creds # we made this module for importing twitter api creds
 
 client = boto3.client('emr')
-
+s3res  = boto3.resource('s3')
 
 # how many minutes should the stream stay open?
-minutes_forward = 3
-
+minutes_forward = int(s3res.Object('cs205-final-project','setup/stream_duration.txt').get()['Body'].read())
+minutes_forward = 10
+# we will reset duration to this default after the script finishes running (see end of script)
+DURATION_DEFAULT = 5
 
 path = expanduser("~")
 on_cluster = (path == "/home/hadoop")
@@ -147,6 +149,9 @@ else:
 print "END twitter-in.py"
 response.close()
 
+# restore duration default if changed
+if minutes_forward != DURATION_DEFAULT:
+	s3res.Object('cs205-final-project','setup/stream_duration.txt').put(Body=str(DURATION_DEFAULT))
 	
 
 

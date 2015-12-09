@@ -71,7 +71,7 @@ input[type='button'] {
 		display:none;
 	}
 	#step2 {
-		width:inherit;
+		width:500px;
 		display:none;
 		margin: inherit;
 		padding-top:5px;
@@ -132,33 +132,3 @@ input[type='button'] {
 }
 
 
-
-
-/* ADMINI PAGE */
-#bake-report {
-	width:500px;
-	display:block;
-	height:200px;
-	font-family:consolas;
-	border: solid 2px red;
-	overflow:scroll;
-}
-
-#terminate-report {
-	width:500px;
-	display:block;
-	height:40px;
-	font-family:consolas;
-	border: solid 2px gray;
-}
-
-
-#tweet, #sentiment {
-	width:600px;
-	display:block;
-	height:200px;
-	font-family:consolas;
-	border: solid 2px steelblue;
-	background-color: lightgray;
-	overflow: scroll;
-}

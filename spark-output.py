@@ -45,7 +45,7 @@ party_of_debate 	= 'gop'
 
 
 # Streaming Spark splits data into separate RDDs every BATCH_DURATION seconds
-BATCH_DURATION = 10 
+BATCH_DURATION = 10
 
 
 import pyspark
@@ -75,8 +75,8 @@ jdata = get_search_json(search_json_fname)
 # Collect all search terms in JSON into search_terms list
 search_terms = pool_search_terms(jdata)
 
-filtered = (kstream.map(make_json) 
-				.filter(lambda tweet: filter_tweets(tweet,search_terms))
+filtered = (kstream.map(lambda data: make_json(data,BATCH_DURATION)) 
+				.filter(lambda tweet: filter_tweets(tweet[1],search_terms))
 				.map(lambda tweet: get_relevant_fields(tweet,jdata,party_of_debate))
 				.cache()
 		)

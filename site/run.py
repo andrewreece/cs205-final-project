@@ -23,21 +23,37 @@ def template_index():
 	except Exception, e:
 		return "Error:"+str(e)
 
+
 ''' Load admin interface admini.html '''
-@app.route("/admini")
+@app.route("/admini205")
 def template_admini():
 	try:
 		return render_template('admini.html')
 	except Exception, e:
 		return "Error:"+str(e)
 
-''' Spin up a new cluster '''
-@app.route("/bake")
-def bake():
+
+''' Get default stream duration '''
+@app.route("/get_duration")
+def get_duration():
 	try:
-		return jsonify(baker.bake_emr())
+		s3 = boto3.resource('s3')
+		default_duration = s3.Object('cs205-final-project','setup/stream_duration.txt').get()['Body'].read()
+		return default_duration
+	except Exception,e:
+		return str(e)
+
+
+''' Spin up a new cluster '''
+@app.route("/bake/<mtype>/<ctype>/<duration>")
+def bake(mtype,ctype,duration):
+	try:
+		mtype = mtype.replace("_",".")
+		ctype = ctype.replace("_",".")
+		return jsonify(baker.bake_emr(mtype,ctype,duration))
 	except Exception, e:
 		return 'error'+str(e)
+
 
 ''' Terminate an existing cluster (needs cluster ID) '''
 @app.route("/terminate/<jobid>")
@@ -46,6 +62,7 @@ def terminate(jobid):
 		return baker.terminate_emr(jobid)
 	except Exception, e:
 		return str(e)
+
 
 ''' Pulls down analysis output, stored in AWS SimpleDB table '''
 @app.route('/pull/<table_name>')
@@ -67,6 +84,7 @@ def pull(table_name):
 	except Exception, e:
 		return str(e)+'error'
 
+
 ''' Check current status of cluster (need cluster ID) '''
 @app.route('/checkcluster/<cid>')
 def check_cluster_status(cid):
@@ -80,6 +98,35 @@ def check_cluster_status(cid):
 			return jsonify({"id":cname,"status":cstatus})
 		else:
 			return "No active clusters found"
+	except Exception, e:
+		return str(e)
+
+
+''' Check if GD cluster is currently running '''
+@app.route('/gd_cluster_running')
+def gd_cluster_running(cluster_name="gaugingdebate"):
+	try:
+		client  = boto3.client('emr')
+
+		response = client.list_clusters(
+		    ClusterStates=['STARTING','BOOTSTRAPPING','RUNNING','WAITING']
+		)
+
+		clusters = response['Clusters']
+		states = [c['Status']['State'] for c in clusters if c['Name'] == cluster_name]
+
+		if len(clusters) == 0:
+			return "0_There are no sentiment trackers currently running.<br /> \
+					(If you have administrator privileges and want to start a tracker, <br />\
+					go to the administrator dashboard to get one started.)"
+		
+		elif ( ('RUNNING' not in states) and ('WAITING' not in states) ):
+			return "0_A sentiment tracker is currently starting up. It takes about 15 minutes to start up \
+					a tracker, please try back soon."
+		
+		else:
+			return "1_Tracker found, loading data now..."
+
 	except Exception, e:
 		return str(e)
 
