@@ -26,7 +26,7 @@ input[type='button'] {
 	margin-bottom:10px;
 	text-align: center;
 
-        background: rgb(235,235,235) url("../visual/twitter-flag.png") no-repeat;
+        background: rgb(235,235,235) url("../images/twitter-flag.png") no-repeat;
         background-position: left center;
 }
 
