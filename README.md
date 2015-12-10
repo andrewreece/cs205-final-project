@@ -16,7 +16,7 @@ All content is licensed under the MIT Open Source License (see below).
 ####For CS205 Graders  
 See [our final report](https://docs.google.com/document/d/14FZ1wTJc4o78O6IW_lG1xerzGrCdHfYXJ8xAQKVSR0w/edit?usp=sharing).  You can also review [our process journal](https://docs.google.com/document/d/1ncgcKObu8FmFr2-T6JLUhg-GArKaeCCcC7qfIMB1dbc/edit?usp=sharing) for all the step-by-step gory details.  
 The app normally runs on a streaming AWS cluster, and we will set up a cron job for it to run automatically when actual debates take place.  In the meantime, we will keep a local Streaming Spark instance running for the next few days while grading takes place.   
-<b style="color:red;">Important!</b> The web app automatically detects whether a cluster is currently serving content.  Since there will likely not be a cluster running when you are reviewing our project for grading, if you click the Live Stream option, it will tell you no cluster is found.  We've provided a button "Try Tracking Anyway" - click this and the app will read off of the data being stored via our local instance.  
+<b style="color:red;">Important!</b> The web app automatically detects whether a cluster is currently serving content.  There will likely not be a cluster running when you are reviewing our project for grading, as it's too costly for us to keep an on-demand dedicated cluster running.  That means if you click the Live Stream option on the website, it will tell you no cluster is found.  We've provided a button "Try Tracking Anyway" - click this and the app will read off of the data being stored via our local instance.  We'll do our best to keep the local instance up and running for the next few days, although we may need to shut it down from time to time for machine memory constraints.  
 If you want to run a local instance yourself, follow the instructions in the final report.
   
 ####Data Pipeline  
@@ -51,7 +51,7 @@ The web interface allows users to choose either streaming or historical analysis
 
 There is also an administrator dashboard which allows admins to start up Spark clusters for streaming functionality. The address of this dashboard is not public - if you're on the CS205 staff you should have received this address in an email.  
 
-<b>S3</b>
+<b>S3</b>  
 This isn't part of the data pipeline, per se, but we ended up storing almost all our configurations, settings, credentials, and scripts on [S3](https://aws.amazon.com/s3/).  This made it easy for us not to worry about file paths when switching between local and cluster instances, and it interfaces well with the AWS ecosystem.  Most, if not all, of the configuration files we use are not hosted here on GitHub, but are on S3 instead.
 
 ####Analysis  
