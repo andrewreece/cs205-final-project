@@ -10,13 +10,12 @@ var ready_indicator; // set from call to gd_cluster_running/, indicates whether 
 var closure = true; // for starting and stopping time
 var default_starting_score = 7.0; // for series with no zero-point data, this is an arbitrary starting point
 var onload_now = new Date();
-var maximum_time_span = 4; // in the live streaming case, how many hours from now to keep pulling data?
+var maximum_time_span = 240; // in the live streaming case, how many minutes from now to keep pulling data?
 var rounding_interval = 30; // round timestamps to interval floor. eg. interval=30, 8:30:28 --> 8:30:00
 var master_chart_data = []; // keeps track of growing chart data in the streaming case
 var every_N_milliseconds = 30000;
 var timezone_offset = new Date().getTimezoneOffset()*60*1000;
 var fetch_round = 0; // tracks number of times from initial request we've fetched data. resets on new request.
-var final_end_time   = onload_now.setHours(onload_now.getHours()+maximum_time_span);
 var views = { // for toggling between intro and chart views
 			 "intro-view": "#container-intro",
 			 "chart-view": "#container-chart"
@@ -515,6 +514,36 @@ function getDebateData(json_file,timeframe) {
 }
 
 
+function updateChart(original_start, end_time_secs, timeframe, interval_id) {
+	fetch_round++;
+
+	var now = new Date();
+	var sec = now.getSeconds();
+
+	var floor_sec = Math.floor( sec / rounding_interval ) * rounding_interval;
+
+	start_time_milli 	= now.setSeconds(floor_sec);
+	start_time_secs 	= Math.floor( (now.getTime() - timezone_offset) / 1000 );
+	start_time_oneback 	= start_time_secs - rounding_interval; // get previous N second interval of data
+
+	if (start_time_secs < end_time_secs) {
+
+		console.log('current batchtime (30s back): '+start_time_oneback);
+
+		var json_file = '/get_debate_data/{0}/{1}'.format(start_time_oneback,0);
+
+		getDebateData(json_file,timeframe);
+
+	} else {
+		console.log('original start time: '+original_start);
+		console.log('start time: '+new Date(start_time_milli)+' end time: '+new Date(end_time_secs*1000));
+		console.log('start time secs: '+start_time_secs+', end time secs: '+end_time_secs);
+		console.log('closing loop now.');
+		clearInterval(interval_id);
+	}
+}
+
+
 function loadChartData(obj,timeframe) {
 	/* Note: obj is not the same data type, depending on whether it's coming from a request for
 			 streaming or archived data. If archived, it's the DOM <option> object of the debate date selected.
@@ -538,7 +567,10 @@ function loadChartData(obj,timeframe) {
 		end_time   = obj.data('end_time');
 		console.log('start time: '+start_time+', end time: '+end_time);
 
-		var initial_span  	= 1200;
+		/* If we need to grab a full debate's worth of data, that's too big to load quickly.
+			So instead we load the first 1200 seconds (20 min) while we have Oboe.js get the rest
+		*/
+		var initial_span  	= 1200; 
 		var init_end_time  	= start_time + initial_span;
 		var json_file		= '/get_debate_data/{0}/{1}'.format(start_time,init_end_time);
 
@@ -547,40 +579,18 @@ function loadChartData(obj,timeframe) {
 
 	} else if (timeframe=="now") {
 
-		var original_start = new Date();
-		//end_time_secs = obj.setHours(obj.getHours()+maximum_time_span) / 1000;
-		var maxiumum_minute_span = 10;
+		var interval_id 	= null;
+		var original_start  = new Date();
 
-		obj.setMinutes(obj.getMinutes()+maxiumum_minute_span);
-		var end_time_secs = Math.floor( (obj.getTime() - obj.getTimezoneOffset()*60*1000) / 1000 );
+		obj.setMinutes(obj.getMinutes()+maximum_time_span);
 
-		var interval_id = setInterval( 
+		var end_time_secs = Math.floor( (obj.getTime() - timezone_offset) / 1000 );
+
+		updateChart(original_start, end_time_secs, timeframe);
+
+		interval_id = setInterval( 
 			function() {
-
-				fetch_round++;
-
-				var now = new Date();
-				var sec = now.getSeconds();
-				var floor_sec = Math.floor( sec / rounding_interval ) * rounding_interval;
-				start_time_milli = now.setSeconds(floor_sec);
-				start_time_secs = Math.floor( (now.getTime() - now.getTimezoneOffset()*60*1000) / 1000 );
-				start_time_oneback = start_time_secs - rounding_interval; // get previous N second interval of data
-
-				if (start_time_secs < end_time_secs) {
-
-					console.log('current batchtime (30s back): '+start_time_oneback);
-
-					var json_file = '/get_debate_data/{0}/{1}'.format(start_time_oneback,0);
-
-					getDebateData(json_file,timeframe);
-
-				} else {
-					console.log('original start time: '+original_start);
-					console.log('start time: '+new Date(start_time_milli)+' end time: '+new Date(end_time_secs*1000));
-					console.log('start time secs: '+start_time_secs+', end time secs: '+end_time_secs);
-					console.log('closing loop now.');
-					clearInterval(interval_id);
-				}
+				updateChart(original_start, end_time_secs, timeframe, interval_id);
 			}, every_N_milliseconds);
 	}
 
