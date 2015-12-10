@@ -27,7 +27,7 @@ We can access the Twitter stream through the Twitter developer's API, which prov
 [Apache Kafka](http://kafka.apache.org/) is a distributed publish-subscribe messaging system that is built to work with the rest of the Apache ecosystem. It serves as a broker for incoming streams of data, and for outgoing requests. Spark Streaming has a native Kafka connector.  (Actually, Spark's Java and Scala versions have native connectors for the Twitter stream, but we developed in PySpark, which does not yet have this feature.)  
 
 <b>Spark Streaming</b>  
-Spark Streaming works more-or-less like normal Spark.  The main abstraction is the "DStream", but with a few I/O exceptions you can basically treat these like regular RDDs. There is a start, await, and exit sequence that is set to tell the stream when to open and close, and otherwise it's Spark as usual.  
+[Spark Streaming](http://spark.apache.org/docs/latest/streaming-programming-guide.html) works more-or-less like normal Spark.  The main abstraction is the "DStream", but with a few I/O exceptions you can basically treat these like regular RDDs. There is a start, await, and exit sequence that is set to tell the stream when to open and close, and otherwise it's Spark as usual.  
 
 <b>Spark SQL</b>  
 [Spark SQL](http://spark.apache.org/docs/latest/sql-programming-guide.html) offers Pandas-y data frames and Hive query functionality on RDDs.  This is nice for conducting groupby operations when groupByKey() is not feasible.  In our case, it came in handy for grouping data by both timestamp and candidates.  It's worth noting that aggregate functions for groupby objects are still quite primitive, and (at least in PySpark) don't yet offer the degree of customization for aggregating functions that you might expect from, say, Pandas.  In fact, we used Pandas for analyzing the historical data, as it was much easier to get the data in the shape we needed.  
@@ -99,7 +99,8 @@ Topical content is determined using [a parallelized adaptation](http://www.datal
         └── utils.py
         
         
-        
+    
+<div style="font-family:Consolas,Courier;font-size:9pt;">    
 MIT Open Source License  
 Copyright (c) 2015 Daniel Rajchwald, Andrew Reece  
 
@@ -122,3 +123,4 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+</div>
