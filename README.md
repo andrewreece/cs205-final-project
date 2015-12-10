@@ -65,41 +65,41 @@ Topical content is determined using [a parallelized adaptation](http://www.datal
 Files are categorized as either site/ and streaming/   
 
 ├── site    
-│   ├── __init__.py  
-│   ├── baker.py  
-│   ├── nocache.py  
-│   ├── passenger_wsgi.py  
-│   ├── run.py  
-│   ├── static  
-│   │   ├── css  
-│   │   │   ├── admini.css  
-│   │   │   └── main.css  
-│   │   ├── images  
-│   │   │   └── twitter-flag.png  
-│   │   └── js  
-│   │       ├── admini.js  
-│   │       ├── instance-types.txt  
-│   │       ├── main.js  
-│   │       └── oboe-browser.min.js  
-│   ├── templates  
-│   │   ├── admini.html  
-│   │   ├── experimental.html  
-│   │   └── index.html  
-│   └── utils.py  
+    ├── \_\_init\_\_.py  
+    ├── baker.py  
+    ├── nocache.py  
+    ├── passenger_wsgi.py  
+    ├── run.py  
+    ├── static  
+        ├── css  
+            ├── admini.css  
+            └── main.css  
+        ├── images  
+            └── twitter-flag.png  
+        └── js  
+            ├── admini.js  
+            ├── instance-types.txt  
+            ├── main.js  
+            └── oboe-browser.min.js  
+    ├── templates  
+        ├── admini.html  
+        ├── experimental.html  
+        └── index.html  
+    └── utils.py  
 └── streaming  
     
     ├── bootstrap\_actions   
-    │   ├── install-basics.sh  
-    │   ├── install-kafka.sh  
-    │   ├── install-zookeeper.sh  
-    │   ├── server.properties.aws  
-    │   ├── start-kafka-server.sh  
-    │   └── start-kafka-topic.sh  
+        ├── install-basics.sh  
+        ├── install-kafka.sh  
+        ├── install-zookeeper.sh  
+        ├── server.properties.aws  
+        ├── start-kafka-server.sh  
+        └── start-kafka-topic.sh  
     └── jobs  
         ├── __init__.py  
         ├── creds.py  
         ├── jars  
-        │   └── spark-streaming-kafka-assembly_2.10-1.5.2.jar  
+            └── spark-streaming-kafka-assembly_2.10-1.5.2.jar  
         ├── run-main.sh  
         ├── sentiment.py  
         ├── spark-output.py  
