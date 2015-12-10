@@ -1,25 +1,36 @@
 
 from kafka import SimpleProducer, KafkaClient
-
+from os.path import expanduser
 import requests
 from requests_oauthlib import OAuth1
-import urllib
-import datetime
-import time
-import json
-import sys
-import boto3
-
-# kafka can have multiple ports if multiple producers, be careful
-kafka_port     = '9092'
+import urllib, datetime, time, json, sys, boto3
+import creds # we made this module for importing twitter api creds
 
 client = boto3.client('emr')
+s3res  = boto3.resource('s3')
+
+bucket_name  = 'cs205-final-project'
+settings_key = 'setup/bake-defaults.json'
+
+# how many minutes should the stream stay open?
+settings = json.loads(s3res.Object(bucket_name,settings_key).get()['Body'].read())
+minutes_forward = int(settings['Stream_Duration']['val'])
+
+#minutes_forward = 10 # for testing
+#print settings
+#print 'minutes forward',minutes_forward
+
+# we will reset duration to this default after the script finishes running (see end of script)
+#DURATION_DEFAULT = 5
+
+path = expanduser("~")
+on_cluster = (path == "/home/hadoop")
+
 
 ''' list_clusters() is used here to find the current cluster ID
 	WARNING: this is a little shaky, as there may be >1 clusters running in production
 			 better to search by cluster name as well as state
 '''
-clusters = client.list_clusters(ClusterStates=['RUNNING','WAITING','BOOTSTRAPPING'])['Clusters']
 
 ''' We need to know if we're on an EMR cluster or a local machine.
 
@@ -31,34 +42,32 @@ clusters = client.list_clusters(ClusterStates=['RUNNING','WAITING','BOOTSTRAPPIN
 	    * We set the location for search-terms.txt on s3
 	- If we are on a local machine, no cluster:
 		* We set Kafka's hostname to localhost.
-		* We need to import findspark before loading pyspark.
 	    * We set the location for search-terms.txt in our local directory
 '''
-if len(clusters) > 0:
 
-	cid 			   = clusters[0]['Id']
-	master_instance    = client.list_instances(ClusterId=cid,InstanceGroupTypes=['MASTER'])
-	hostname 		   = master_instance['Instances'][0]['PrivateIpAddress']
-	search_terms_fname = '/home/hadoop/scripts/search-terms.txt'
 
+if on_cluster:
+	path += '/scripts/'
+	clusters = client.list_clusters(ClusterStates=['RUNNING','WAITING','BOOTSTRAPPING'])['Clusters']
+	cid = clusters[0]['Id']
+	master_instance = client.list_instances(ClusterId=cid,InstanceGroupTypes=['MASTER'])
+	hostname 		= master_instance['Instances'][0]['PrivateIpAddress']
 else:
-
 	import findspark
 	findspark.init()
-	hostname           = 'localhost'
-	search_terms_fname = '/Users/andrew/git-local/search-terms.txt'
+	path += '/git-local/'
+	hostname = 'localhost'
 
+search_terms_fname = path + 'search-terms.txt'
+
+# kafka can have multiple ports if multiple producers, be careful
+kafka_port     = '9092'
 kafka_host = ':'.join([hostname,kafka_port])
 
-	
 kafka = KafkaClient(kafka_host)
 producer = SimpleProducer(kafka)
 
-
-APP_KEY = "bv6mnYBiFeEVKvPEZlg"
-APP_SECRET = "nQZk9Ca8qqJxc1Za07WyW0VPZ6gtAUSF3oPD5sun0"
-OAUTH_TOKEN = "606525030-ilOtJstbRvFCjUNMtOu8DP2HQKGWpQvmUsF6fblE"
-OAUTH_TOKEN_SECRET = "xSVE47qVOFxxZm1oqKwL6zwLVMWpzxCUYGmLJ6CVHR0mZ"
+APP_KEY, APP_SECRET, OAUTH_TOKEN, OAUTH_TOKEN_SECRET = creds.get_twitter_creds()
 
 config_token = OAuth1(APP_KEY,
 					  client_secret=APP_SECRET,
@@ -79,10 +88,8 @@ query_url = config_url + '?' + '&'.join([str(t[0]) + '=' + str(t[1]) for t in da
 # Use stream=True switch on requests.get() to pull in stream indefinitely
 response  = requests.get(query_url, auth=config_token, stream=True)
 
-BATCH_INTERVAL = 60  # How frequently to update (seconds)
-BLOCKSIZE = 50  # How many tweets per update
 
-def set_end_time(minutes_forward=2):
+def set_end_time(minutes_forward=minutes_forward):
 	''' This function is only for initial test output. We'll probably delete it soon.
 		It defines the amount of minutes we keep the tweet stream open for ingestion.
 		In production this will be open-ended, or it will be set based on when the debate ends.
@@ -110,6 +117,8 @@ end_time = set_end_time()
 	NOTE: Twitter has 'etiquette' guidelines for how to handle 503, 401, etc. We should follow them!
 		  Right now we don't do anything about this, other than to report the error to stdout.
 '''
+print "END TIME:",end_time
+
 if response.status_code == 200:
 	print "Reponse Code = 200"
 	ct = 0
@@ -121,12 +130,12 @@ if response.status_code == 200:
 		For that matter, we also need better error handling here, like how long to wait before 
 		reconnecting if the stream drops or rate limits out? 
 	'''
-	timesup = datetime.datetime(end_time['year',
-								end_time['month'],
-								end_time['day'],
-								end_time['hour'],
-								end_time['minute']
-								).strftime('%s')
+	timesup = datetime.datetime(end_time['year'],
+								  end_time['month'],
+								  end_time['day'],
+								  end_time['hour'],
+								  end_time['minute']).strftime('%s')
+			  
 	for line in response.iter_lines():  # Iterate over streaming tweets
 		if int(timesup) > time.time():
 			#print(line.decode('utf8'))
@@ -148,6 +157,9 @@ else:
 print "END twitter-in.py"
 response.close()
 
+# restore duration default if changed
+#if minutes_forward != DURATION_DEFAULT:
+#	s3res.Object(bucket_name,settings_key).put(Body=json.dumps(settings))
 	
 
 

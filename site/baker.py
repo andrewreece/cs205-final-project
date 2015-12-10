@@ -61,40 +61,62 @@
 	bootstrapping and step actions. It only runs to serve its original purpose, for this project.
 '''
 
-import boto3
+import boto3, json
 import numpy as np 
 from datetime import datetime, timedelta
 from collections import OrderedDict
 
-def bake_emr():
+''' Notes on bake_emr default kwargs:
+	
+	As of 08 DEC 2015:
+		c3.xlarge EMR $0.053/hr and EC2 $0.21/hr. 
+		m1.xlarge EMR $0.088/hr and EC2 $0.35/hr! c3.xlarge is cheaper! (Also cheaper than m3.xlarge).
+		That's why we have it set as the master type default.  Core type m1.medium is $0.02/$0.087.)
+		https://aws.amazon.com/elasticmapreduce/pricing/
+
+	You generated the master and slave security groups, somehow.  They seem to work indefinitely.
+'''
+def bake_emr(BUCKET_NAME, SETTINGS_KEY,
+			 MASTER_TYPE='c3.xlarge', 
+			 CORE_TYPE='m1.medium',
+			 EC2_KEY_NAME='cs205',
+			 RELEASE_LABEL='emr-4.1.0',
+			 HADOOP_VERSION='2.6.0',
+			 MASTER_SECURITY_GROUP='sg-d33b7cb8',
+			 SLAVE_SECURITY_GROUP='sg-d13b7cba',
+			 JOB_NAME='gauging_debate'):
+
 	ec2client = boto3.client('ec2')
 	emrclient = boto3.client('emr')
+	s3res     = boto3.resource('s3')
 
-	EC2_KEY_NAME   = 'cs205' 		# SSH key name
-	RELEASE_LABEL  = 'emr-4.1.0'		# AWS Release (replaces AMI version)
-	HADOOP_VERSION = '2.6.0'	
-	#SPARK_VERSION  = '1.5.0'		# Spark version is defined by Release version
-	INSTANCE_TYPES  = OrderedDict() 	# Use ordered dict to get master zone first (see below)
-	INSTANCE_TYPES['MASTER'] = "m1.large"	# Master node instance type
-	INSTANCE_TYPES['CORE'] = "m1.medium"	# Core node instance type
-	#INSTANCE_TYPES['TASK'] = "m1.small"	# Task node instance type
+	# get bake settings from s3 file (can be adjusted on /admini205)
+	r = s3.Object(BUCKET_NAME,SETTINGS_KEY).get()['Body'].read()		
+	settings = json.loads(r)
+
+	INSTANCE_TYPES  		 = OrderedDict() 	# Use ordered dict to get master zone first (see below)
+	INSTANCE_TYPES['MASTER'] = settings['Master_Node_Type']['val']	# Master node instance type
+	INSTANCE_TYPES['CORE'] 	 = settings['Core_Node_Type']['val']	# Core node instance type
+
+
 
 	''' IMPORTANT NOTES ABOUT YOUR CONFIGURATION: 
 
-		- As of 18 NOV you have master and core nodes running on spot pricing. 
+		- As of 09 DEC you have master and core nodes running on spot pricing. 
 		  Change this so that at least master is on-demand when you go live.
+		  Or setup auto-scaling to handle all this.
 	'''
 
 
-	def get_bid_details(best,level,spots,itypes,zone,lowest_bid=0.02):
+	def get_bid_details(best,level,spots,itypes,zone,bid_multiplier=1.2,lowest_bid=0.015,digits=3):
 		prices = [float(x['SpotPrice']) for x in spots['SpotPriceHistory'] if x['AvailabilityZone']==zone and x['InstanceType'] == itypes[level]]
-		avg_price = round(np.mean(prices),3) if len(prices) else np.inf 
-		proposed_bid = round(best[level]['price']*1.2,3)
+		avg_price = round(np.mean(prices),digits) if len(prices) else np.inf 
+		proposed_bid = round(avg_price*bid_multiplier,digits)
 		if proposed_bid < lowest_bid:
 			proposed_bid = lowest_bid
-		return zone, avg_price, proposed_bid
+		return avg_price, proposed_bid
 
-	def find_best_spot_price(ec2,itypes,lowest_bid=0.02,hours_back=1,max_results=20):
+	def find_best_spot_price(ec2,itypes,lowest_bid=0.02,hours_back=3,max_results=20):
 		''' Determines best spot price for given instance types in cluster.
 
 			How it works:
@@ -118,33 +140,33 @@ def bake_emr():
 		best  = {
 			  'MASTER':
 					{ 'zone':'',
-					  'price':np.inf
+					  'price':np.inf,
+					  'bid':lowest_bid
 					},
 			  'CORE':
 					{ 'zone':'',
-					  'price':np.inf
+					  'price':np.inf,
+					  'bid':lowest_bid
 					}
 			}
-
-
 		for zone in zones:
-			new_zone, avgp, new_bid = get_bid_details(best, 'MASTER', spots, INSTANCE_TYPES, zone)
+			avgp, new_bid = get_bid_details(best, 'MASTER', spots, INSTANCE_TYPES, zone)
 
 			if avgp < best['MASTER']['price']:
 				best['MASTER']['zone'] = zone
 				best['MASTER']['price'] = avgp
 				best['MASTER']['bid'] = new_bid
 
-		print "Best bid for MASTER ({}) = {}: {}".format(INSTANCE_TYPES['MASTER'],best["MASTER"]['zone'],best["MASTER"]['bid'])
+		print "Best bid for MASTER ({}) = {}: {}".format(INSTANCE_TYPES['MASTER'],best['MASTER']['zone'],best['MASTER']['bid'])
 		
 		best['CORE']['zone'] = best['MASTER']['zone']
-		_, avgp, new_bid = get_bid_details(best, 'CORE', spots, INSTANCE_TYPES, best['CORE']['zone'])
+		avgp, new_bid = get_bid_details(best, 'CORE', spots, INSTANCE_TYPES, best['CORE']['zone'])
 		best['CORE']['price'] = avgp
-		best['CORE']['bid'] = new_bid
+		best['CORE']['bid'] = new_bid if (new_bid < np.inf) else lowest_bid
 
 		print "Best bid for CORE ({}) = {}: {}".format(INSTANCE_TYPES['CORE'],best['CORE']['zone'],best['CORE']['bid'])
 		
-		return best 
+		return best  
 
 	best = find_best_spot_price(ec2client,INSTANCE_TYPES)
 
@@ -245,8 +267,6 @@ def bake_emr():
 			]
 
 
-	JOB_NAME = 'andrew testing cluster' # This is the description AWS assigns to a cluster
-
 	''' Boto3 has an EMR client, the run_job_flow() method instantiates an EMR cluster.
 		Lots of configurations, see Boto3 docs for more.
 		NOTE: Both JobFlowRole and ServiceRole are necessary, even if they are only default roles.
@@ -263,8 +283,8 @@ def bake_emr():
 							'KeepJobFlowAliveWhenNoSteps':True,
 							'TerminationProtected':False,
 							'HadoopVersion':HADOOP_VERSION,
-							'EmrManagedMasterSecurityGroup':'sg-d33b7cb8', #GroupName=ElasticMapReduce-master
-							'EmrManagedSlaveSecurityGroup':'sg-d13b7cba', #GroupName=ElasticMapReduce-slave
+							'EmrManagedMasterSecurityGroup':MASTER_SECURITY_GROUP, #GroupName=ElasticMapReduce-master
+							'EmrManagedSlaveSecurityGroup':SLAVE_SECURITY_GROUP, #GroupName=ElasticMapReduce-slave
 						   },
 						Applications=apps,
 						BootstrapActions=bootstraps,
@@ -287,7 +307,7 @@ def terminate_emr(job_id):
 	'''
 	client = boto3.client('emr')
 	try:
-		client.terminate_job_flows(JobFlowIds=[jid])
+		client.terminate_job_flows(JobFlowIds=[job_id])
 		return "Cluster terminating now."
 	except Exception, e:
 		return str(e)
