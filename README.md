@@ -1,10 +1,11 @@
-# Gauging Debate: Tracking Sentiment for the 2016 US Elections
-## Authors: Daniel Rajchwald, Andrew Reece
+## Gauging Debate: Tracking Sentiment for the 2016 US Elections
+### Authors: Daniel Rajchwald, Andrew Reece
 
 See <a href="https://docs.google.com/document/d/1ncgcKObu8FmFr2-T6JLUhg-GArKaeCCcC7qfIMB1dbc/edit?usp=sharing">process book</a> for updates.
 
 .
 ├── site
+
 │   ├── __init__.py
 │   ├── baker.py
 │   ├── nocache.py
