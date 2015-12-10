@@ -7,6 +7,11 @@ body {
 	color:rgb(125,125,125);
 }
 
+input[type='button'] {
+	-webkit-appearance: button;
+	font-size:12pt;
+}
+
 #intro {
 	margin-top:20px;
 	margin-left:10px;
@@ -18,24 +23,26 @@ body {
 }
 
 #default-settings-container {
-	display:block;
+	display:inline-block;
 	width:700px;
-	font-family: consolas, sans serif;
 }
 
 	#default-settings {
 		margin-top:5px;
 		margin-left:30px;
+		font-family: consolas, sans serif;
 	}
 
 		.default {
 			color:rgba(128,0,0,.6);
 		}
 
-
-#update-settings {
+#update-settings-container {
 	display:none;
-	width:650px;	
+}
+#update-settings {
+	display:inline-block;
+	width:350px;	
 	margin-top:10px;
 	margin-left:20px;
 	padding:5px;

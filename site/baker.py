@@ -61,7 +61,7 @@
 	bootstrapping and step actions. It only runs to serve its original purpose, for this project.
 '''
 
-import boto3
+import boto3, json
 import numpy as np 
 from datetime import datetime, timedelta
 from collections import OrderedDict
@@ -76,9 +76,9 @@ from collections import OrderedDict
 
 	You generated the master and slave security groups, somehow.  They seem to work indefinitely.
 '''
-def bake_emr(MASTER_TYPE='c3.xlarge', 
+def bake_emr(BUCKET_NAME, SETTINGS_KEY,
+			 MASTER_TYPE='c3.xlarge', 
 			 CORE_TYPE='m1.medium',
-			 STREAM_DURATION=30,
 			 EC2_KEY_NAME='cs205',
 			 RELEASE_LABEL='emr-4.1.0',
 			 HADOOP_VERSION='2.6.0',
@@ -90,16 +90,19 @@ def bake_emr(MASTER_TYPE='c3.xlarge',
 	emrclient = boto3.client('emr')
 	s3res     = boto3.resource('s3')
 
-	# how long should the stream stay open and read tweet data? we store this value on s3 for twitter-in.py
-	s3res.Object('cs205-final-project','setup/stream_duration.txt').put(Body=str(STREAM_DURATION))
+	# get bake settings from s3 file (can be adjusted on /admini205)
+	r = s3.Object(BUCKET_NAME,SETTINGS_KEY).get()['Body'].read()		
+	settings = json.loads(r)
 
 	INSTANCE_TYPES  		 = OrderedDict() 	# Use ordered dict to get master zone first (see below)
-	INSTANCE_TYPES['MASTER'] = MASTER_TYPE	# Master node instance type
-	INSTANCE_TYPES['CORE'] 	 = CORE_TYPE	# Core node instance type
+	INSTANCE_TYPES['MASTER'] = settings['Master_Node_Type']['val']	# Master node instance type
+	INSTANCE_TYPES['CORE'] 	 = settings['Core_Node_Type']['val']	# Core node instance type
+
+
 
 	''' IMPORTANT NOTES ABOUT YOUR CONFIGURATION: 
 
-		- As of 18 NOV you have master and core nodes running on spot pricing. 
+		- As of 09 DEC you have master and core nodes running on spot pricing. 
 		  Change this so that at least master is on-demand when you go live.
 		  Or setup auto-scaling to handle all this.
 	'''

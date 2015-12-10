@@ -1,15 +1,12 @@
 var cluster_id;						// Global so terminate() has access
+var interval_id, interval_id2;		// setInterval IDs (we need these to stop them)
 var color = "red";					// Toggle, alternates blue/red output on cluster status report (testing only)
 var check_interval = 30000;			// How frequently should we check up on a baking cluster?
 var tweet_interval = 5000;			// How frequently should we pull down new data from SDB?
-var interval_id, interval_id2;		// setInterval IDs (we need these to stop them)
-var table_name = "tweettest";		// SDB table name (we may end up having more than one for LDA, sentiment, etc)
 var ct = 0;							// ct and max_ct keep track of how many tweets we've displayed in our output
 var max_ct = 40;					// "" ""
 var tnames=['tweets','sentiment']; 	// SDB table names 
-var master_type = 'c3_xlarge'; 		// Argument to bake/ for adjusting EMR master node type
-var core_type   = 'm1_medium';		// Argument to bake/ for adjusting EMR core node type
-var stream_duration = 30;			// Argument to bake/ for adjusting how long the stream stays open
+var bake_settings = {};
 var bake_starting_msg = "Starting cluster...stand by for reporting<br />";
 var bake_complete_msg = "CLUSTER IS FULLY BAKED. DATA COMING.";
 
@@ -21,19 +18,24 @@ function startPeeking(cid, interval) {
 					interval ); // We need interval_id to stop loop
 }
 
-function bake(interval,mtype,ctype,sduration) {
+function bake(interval,settings) {
 	/* Spin up a new cluster, then initiate status check loop 
 	   Note: /bake hits run.py, returns json status.  See run.py documentation for more.
 	*/
-	if (mtype === null) { mtype = '_'; }
-	if (ctype === null) { ctype = '_'; }
 
-	var path = '/bake/'+mtype+'/'+ctype+'/'+sduration;
+	var path = '/bake';
+
+	Object.keys(settings).forEach( function(k) {
+		path += '/'+k+'___'+settings[k].replace(".","_");
+	});
 
 	console.log(path);
-	d3.json(path, function(data) {
+	d3.json(path, function(resp) {
+		console.log(resp);
+	});
+
+	d3.json('/bake', function(data) {
 		console.log(data);
-		console.log((typeof data));
 		$('#bake-report').html( bake_starting_msg );
 		if (data === null) {
 			alert("You can't use this kind of instance type in an EMR cluster. Restarting...");
@@ -43,6 +45,7 @@ function bake(interval,mtype,ctype,sduration) {
 			startPeeking(cluster_id, interval); 
 		}
 	});
+	
 }
 
 function ovenPeek(cid) {
@@ -142,32 +145,23 @@ $('#change-defaults').change(
 	function() {
 		console.log(this.checked);
 		if (this.checked) {
-			$('#update-settings').slideDown();
+			$('#update-settings-container').slideDown();
 		} else {
-			$('#update-settings').slideUp();
+			$('#update-settings-container').slideUp();
 		}
 	}
 );
 
 
-$('#master-type').change( function() {
-	master_type = $(this).val().replace(".","_");
-});
-
-
-$('#core-type').change( function() {
-	core_type = this.val().replace(".","_");
-});
-
-$('#stream-duration').change(function() {
-	stream_duration = this.val();
+$('#update-settings').on('change', '.change-default', function() {
+	bake_settings[$(this).attr('id')] = $(this).val().replace(".","_");
 });
 
 // Get data from SDB
 $('#pull').click( function() { $('#tweet').html("One moment <br />"); getData(tnames); } );
 
 // Start a new cluster
-$('#bake').click( function() { bake(check_interval,master_type,core_type); } );
+$('#bake').click( function() { bake(check_interval,bake_settings); } );
 
 // Check on an existing cluster
 $('#already-baking-check').click( function() { 
@@ -191,44 +185,63 @@ $(document).ready(function() {
 
 	// get instance types from text file, load into dropdown box options
 	var path = '/static/js/instance-types.txt';
-	var options = {"null":"Instance type"};
+	var itypes = {"Instance type":"_"};
 
 	d3.text(path, function(data) {
 		var arr = data.split(",");
 		arr.forEach( function(d) {
-			options[d]=d;
+			itypes[d]=d.replace(".","_");
 		});
-		var $mtype = $('#master-type');
-		var $ctype = $('#core-type');
-
-		$.each(options, function(key, value) {   
-		     $mtype.append($("<option/>", {
-		         value:key,
-		         text:value
-		     }));
-		     $ctype.append($("<option/>", {
-		         value:key,
-		         text:value
-		     }));
-		});	
 	});
 
-	var $duration = $('#stream-duration');
-	var mins = _.range(5,250,5); // 5 to 245 min (~4hr max)
-	
-	d3.text('/get_duration', function(val) {
-		var default_duration = val;
+	// this section loads up all of the default setting reports, as well as the options to adjust settings
+	d3.json('/get_default_bake_settings', function(json) {
 
-		$('#default-duration').text(default_duration);
+		bake_settings = json;
 
-		$.each(mins, function(i,min) {   
-		     $duration.append($("<option/>", {
-		         value:min,
-		         text:min+" min",
-		         selected: function() { if (min==default_duration) {return true;} else { return false; } }
-		     }));
-		 });
+		d3.entries(json).forEach( function(d) {
+			bake_settings[d.key] = d.value.val;
+
+			var option_html;
+			var heading = d.key.replace(/_/g,' ');
+			var value = d.value.val;
+
+			$('#default-settings')
+				.append(heading+': <span class="default">'+value+'</span><br />');
+
+			if (heading.slice(-8)=="Duration") { // get list of stream durations
+				var upper_limit;
+				var time_unit;
+				if (heading.slice(0,5)=="Batch") {
+					upper_limit = 125;
+					time_unit = "secs";
+				} else {
+					upper_limit = 250;
+					time_unit = "mins";
+				}
+				var intervals = _.range(5,upper_limit,5); // 5 to 245 min (~4hr max)
+				var default_stream_duration = d.value.val;
+				intervals.forEach( function(m) {
+					var selected =  (m==default_stream_duration) ? "selected" : "";
+					option_html += '<option value="'+m+'" '+selected+'>'+m+' '+time_unit+'</option>';
+				});
+
+			} else if (heading.slice(-4)=="Type") { // get EC2 instance types
+
+				d3.entries(itypes).forEach( function(obj) {
+					option_html += '<option value="'+obj.value+'">'+obj.key+'</option>';
+				});	
+
+			} else { // get defaults stored in bake-defaults.csv
+				d.value.opt.forEach( function(o) {
+					option_html += '<option value="'+o+'">'+o+'</option>';
+				});	
+			}
+
+			$('#update-settings')
+				.append(heading+': <select id="'+d.key+'" class="change-default">'+option_html+'</select>');	
+			$('#update-settings').append('<br />');
+		});
 	});
-	
 });
 

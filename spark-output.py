@@ -1,5 +1,12 @@
 from utils import *
 from os.path import expanduser
+import boto3
+
+
+s3res  = boto3.resource('s3')
+
+bucket_name  = 'cs205-final-project'
+settings_key = 'setup/bake-defaults.json'
 
 
 ''' We need to know if we're on an EMR cluster or a local machine.
@@ -33,19 +40,12 @@ kafka_host = ':'.join([hostname,kafka_port])
 
 
 
-''' IMPORTANT: 
-				party_of_debate needs to be set automatically when the cluster starts up 
-
-	And how will this affect our ability to have a generic, non-debate version?
-	We'd need to pass in a flag word like 'notdebate' along with the user-defined search terms.
-'''
-
-party_of_debate 	= 'gop'
-
-
-
+settings = json.loads(s3res.Object(bucket_name,settings_key).get()['Body'].read())
+party_of_debate = settings['Topic_Tracked']['val']
 # Streaming Spark splits data into separate RDDs every BATCH_DURATION seconds
-BATCH_DURATION = 10
+BATCH_DURATION = int(settings['Batch_Duration']['val'])
+# how many minutes should the stream stay open?
+STREAM_DURATION = int(settings['Stream_Duration']['val'])
 
 
 import pyspark
@@ -79,7 +79,7 @@ filtered = (kstream.map(lambda data: make_json(data,BATCH_DURATION))
 				.filter(lambda tweet: filter_tweets(tweet[1],search_terms))
 				.map(lambda tweet: get_relevant_fields(tweet,jdata,party_of_debate))
 				.cache()
-		)
+		   )
 
 # writes individual tweets to sdb domain: tweets
 filtered.foreachRDD(lambda rdd: rdd.foreachPartition(write_to_db))

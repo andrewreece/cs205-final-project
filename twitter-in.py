@@ -9,11 +9,19 @@ import creds # we made this module for importing twitter api creds
 client = boto3.client('emr')
 s3res  = boto3.resource('s3')
 
+bucket_name  = 'cs205-final-project'
+settings_key = 'setup/bake-defaults.json'
+
 # how many minutes should the stream stay open?
-minutes_forward = int(s3res.Object('cs205-final-project','setup/stream_duration.txt').get()['Body'].read())
-minutes_forward = 10
+settings = json.loads(s3res.Object(bucket_name,settings_key).get()['Body'].read())
+minutes_forward = int(settings['Stream_Duration']['val'])
+
+#minutes_forward = 10 # for testing
+#print settings
+#print 'minutes forward',minutes_forward
+
 # we will reset duration to this default after the script finishes running (see end of script)
-DURATION_DEFAULT = 5
+#DURATION_DEFAULT = 5
 
 path = expanduser("~")
 on_cluster = (path == "/home/hadoop")
@@ -150,8 +158,8 @@ print "END twitter-in.py"
 response.close()
 
 # restore duration default if changed
-if minutes_forward != DURATION_DEFAULT:
-	s3res.Object('cs205-final-project','setup/stream_duration.txt').put(Body=str(DURATION_DEFAULT))
+#if minutes_forward != DURATION_DEFAULT:
+#	s3res.Object(bucket_name,settings_key).put(Body=json.dumps(settings))
 	
 
 

@@ -4,8 +4,7 @@ from random import randint
 from datetime import datetime, timedelta
 from collections import OrderedDict
 import numpy as np
-import time
-import boto3
+import time, json, boto3
 import baker # this is a library we made with EMR baking functions
 import utils # misc helper functions, includes get/set debate schedule
 from nocache import nocache # this is a library someone else made that keeps Flask from caching results
@@ -14,6 +13,8 @@ from nocache import nocache # this is a library someone else made that keeps Fla
 ## the core flask app
 app = Flask(__name__)
 
+bucket_name  = 'cs205-final-project'
+settings_key = 'setup/bake-defaults.json'
 
 ''' Load web interface index.html '''
 @app.route("/")
@@ -33,24 +34,39 @@ def template_admini():
 		return "Error:"+str(e)
 
 
-''' Get default stream duration '''
-@app.route("/get_duration")
-def get_duration():
+''' Sets new default cluster-bake settings from /admini205 '''
+@app.route("/set_default_bake_settings/<x1>/<x2>/<x3>/<x4>/<x5>/<x6>")
+def set_default_bake_settings(x1,x2,x3,x4,x5,x6):
 	try:
 		s3 = boto3.resource('s3')
-		default_duration = s3.Object('cs205-final-project','setup/stream_duration.txt').get()['Body'].read()
-		return default_duration
+		result = s3.Object(bucket_name,settings_key).get()['Body'].read()		
+		settings = json.loads(result)
+		newsets = [x1,x2,x3,x4,x5,x6]
+		for s in newsets:
+			k,v = s.split("___")
+			settings[k]["val"] = v
+		s3.Object(bucket_name,settings_key).put(Body=json.dumps(settings))
+		return jsonify(settings)
+	except Exception,e:
+		return "There was an error: "+str(e)
+
+
+''' Get default cluster bake settings '''
+@app.route("/get_default_bake_settings")
+def get_default_bake_settings():
+	try:
+		s3 = boto3.resource('s3')
+		result = s3.Object(bucket_name,settings_key).get()['Body'].read()		
+ 		return jsonify(json.loads(result))
 	except Exception,e:
 		return str(e)
 
 
 ''' Spin up a new cluster '''
-@app.route("/bake/<mtype>/<ctype>/<duration>")
-def bake(mtype,ctype,duration):
+@app.route("/bake")
+def bake():
 	try:
-		mtype = mtype.replace("_",".")
-		ctype = ctype.replace("_",".")
-		return jsonify(baker.bake_emr(mtype,ctype,duration))
+		return jsonify(baker.bake_emr(bucket_name,settings_key))
 	except Exception, e:
 		return 'error'+str(e)
 

@@ -662,7 +662,7 @@ $('#step2-body')
 	);
 
 $('#step2-body')
-	.on('click', '#start-live-tracking',
+	.on('click', '#start-live-tracking,#override-live-tracking',
 		function() {
 			loadChartData(new Date(),"now");
 		}
