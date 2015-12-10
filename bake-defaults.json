@@ -1,1 +1,0 @@
-{"Topic_Tracked":{"val":"gop","opt":["gop","dem","custom"]},"Master_Node_Type":{"val":"c3.xlarge","opt":[""]},"Master_Node_Pricing":{"val":"spot","opt":["spot","on_demand"]},"Core_Node_Type":{"val":"m1.medium","opt":[""]},"Core_Node_Pricing":{"val":"spot","opt":["spot","on_demand"]},"Stream_Duration":{"val":"10","opt":[""]},"Batch_Duration":{"val":"30","opt":[""]}}
