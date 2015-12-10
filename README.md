@@ -7,18 +7,22 @@
 ####Introduction   
 This is the codebase for a real-time Twitter sentiment tracker, focusing on the 2016 US presidential candidates. It provides live and historical analysis for the entire 2016 electoral cycle.  
 
-This work is the authors' final project for [CS205](http://cs205.org), Fall semester 2015, at Harvard University.  This course, titled "Computing Foundations for Computational Science", emphasized the use of parallelism for making things scalable and efficient.  In part, this work is an exercise in building proficiency with [Apache Spark](http://spark.apache.org/) as a scalable distributed computing platform.  In particular, we utilized [Spark's streaming capabilities](http://spark.apache.org/docs/latest/streaming-programming-guide.html) to process incoming Twitter data in realtime. 
+This work is the authors' final project for [CS205](http://cs205.org), Fall semester 2015, at Harvard University.   
+This course, titled "Computing Foundations for Computational Science", emphasized the use of parallelism for making things scalable and efficient.  In part, this work is an exercise in building proficiency with [Apache Spark](http://spark.apache.org/) as a scalable distributed computing platform.  In particular, we utilized [Spark's streaming capabilities](http://spark.apache.org/docs/latest/streaming-programming-guide.html) to process incoming Twitter data in realtime. 
 
 All content is licensed under the MIT Open Source License (see below).
 
 
 ####For CS205 Graders  
-See [our final report](https://docs.google.com/document/d/14FZ1wTJc4o78O6IW_lG1xerzGrCdHfYXJ8xAQKVSR0w/edit?usp=sharing).  You can also review [our process journal](https://docs.google.com/document/d/1ncgcKObu8FmFr2-T6JLUhg-GArKaeCCcC7qfIMB1dbc/edit?usp=sharing) for all the step-by-step gory details.
+See [our final report](https://docs.google.com/document/d/14FZ1wTJc4o78O6IW_lG1xerzGrCdHfYXJ8xAQKVSR0w/edit?usp=sharing).  You can also review [our process journal](https://docs.google.com/document/d/1ncgcKObu8FmFr2-T6JLUhg-GArKaeCCcC7qfIMB1dbc/edit?usp=sharing) for all the step-by-step gory details.  
+The app normally runs on a streaming AWS cluster, and we will set up a cron job for it to run automatically when actual debates take place.  In the meantime, we will keep a local Streaming Spark instance running for the next few days while grading takes place.   
+<b>Important</b> The web app automatically detects whether a cluster is currently serving content.  Since there will likely not be a cluster running when you are reviewing our project for grading, if you click the Live Stream option, it will tell you no cluster is found.  We've provided a button "Try Tracking Anyway" - click this and the app will read off of the data being stored via our local instance.  
+If you want to run a local instance yourself, follow the instructions in the final report.
   
 ####Data Pipeline  
 Streaming data travels across several components in order to get from the raw Twitter stream to the app's web interface.  This is a rough diagram of how it happens, more detail below:  
   
-#####Twitter stream -> Kafka -> Spark Streaming -> Spark SQL -> SimpleDB -> Flask -> Web
+    #####Twitter stream -> Kafka -> Spark Streaming -> Spark SQL -> SimpleDB -> Flask -> Web
 
 <b>Twitter stream</b>  
 We can access the Twitter stream through the Twitter developer's API, which provides free access to a small portion of the entire stream of tweets.  Since we were only attempting to acquire a small portion of all tweets anyway (ie. only candidate- or debate-related tweets), the app collects most (but not all) of its target tweets with this free access tier.
