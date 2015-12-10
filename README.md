@@ -2,7 +2,7 @@
 ### Authors: Daniel Rajchwald, Andrew Reece
 
 [GaugingDebate.com](http://gaugingdebate.com)   
-[Short video](https://www.youtube.com/watch?v=Vj6o-z_ekT8)
+[Intro video (2 min)](https://www.youtube.com/watch?v=Vj6o-z_ekT8)
 
 ####Introduction   
 This is the codebase for a real-time Twitter sentiment tracker, focusing on the 2016 US presidential candidates. It provides live and historical analysis for the entire 2016 electoral cycle.  
