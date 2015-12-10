@@ -51,6 +51,8 @@ The web interface allows users to choose either streaming or historical analysis
 
 There is also an administrator dashboard which allows admins to start up Spark clusters for streaming functionality. The address of this dashboard is not public - if you're on the CS205 staff you should have received this address in an email.  
 
+<b>S3</b>
+This isn't part of the data pipeline, per se, but we ended up storing almost all our configurations, settings, credentials, and scripts on [S3](https://aws.amazon.com/s3/).  This made it easy for us not to worry about file paths when switching between local and cluster instances, and it interfaces well with the AWS ecosystem.  Most, if not all, of the configuration files we use are not hosted here on GitHub, but are on S3 instead.
 
 ####Analysis  
 This software analyzes tweets related to the 2016 US Presidential Debates.   
@@ -60,7 +62,8 @@ Taking all this into account, we decided to offer updated analysis in 30-second 
 Topical content is determined using [a parallelized adaptation](http://www.datalab.uci.edu/papers/distributed_topic_modeling.pdf) of [Latent Dirichlet Allocation](http://machinelearning.wustl.edu/mlpapers/paper_files/BleiNJ03.pdf).  LDA is, if anything, more demanding than unigram sentiment analysis, in terms of the amount of content it needs to provide stable results. We discovered over the course of our work that it doesn't really work to run this algorithm in a streaming context, as it requires both (a) many words per document and (b) many separate documents. We tried clumping all tweets per candidate together as documents (many words per document, few documents), as well as treating each tweet as a document (few words per document, many documents). Neither one gave very satisfactory results, so, in the end, we provided the code (which works for both static and streaming Spark), but we removed it from the app itself.
   
 ####File Tree
-.  
+Files are categorized as either site/ and streaming/   
+
 ├── site    
 │   ├── __init__.py  
 │   ├── baker.py  
