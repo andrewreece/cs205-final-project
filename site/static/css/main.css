@@ -1,31 +1,154 @@
-input {
-	-webkit-appearance: button;
+body {
+	font-family: 'futura-pt', Helvetica, Arial, Tahoma;
 	font-size:14pt;
+	color:rgb(125,125,125);
 }
 
-#tweet {
-	width:500px;
-	display:block;
-	height:300px;
-	font-family:consolas;
-	border: solid 2px steelblue;
-	background-color: lightgray;
-	overflow: scroll;
+input[type='button'] {
+	-webkit-appearance: button;
+	font-size:12pt;
 }
 
-#bake-report {
-	width:500px;
-	display:block;
-	height:200px;
-	font-family:consolas;
-	border: solid 2px red;
-	overflow:scroll;
+#container-intro {
+	margin-top:10px;
+	width: 100%;
+	display:inline-block;
+	height:550px;
 }
 
-#terminate-report {
-	width:500px;
-	display:block;
-	height:40px;
-	font-family:consolas;
-	border: solid 2px gray;
+#title {
+	width:100%;
+	display: inline-block;
+	height:47px;
+	font-family: ;'futura-pt','Source Sans Pro', Helvetica;
+	color:rgb(110,110,110);
+	font-size:28pt;
+	margin-bottom:10px;
+	text-align: center;
+
+        background: rgb(235,235,235) url("../visual/twitter-flag.png") no-repeat;
+        background-position: left center;
 }
+
+#next-debate-info {
+	position: relative;
+	width: 95%;
+	padding-top:50px;
+	margin: 0 auto;
+	height: auto;
+	font-size:20pt;
+	font-family: 'futura-pt', 'Source Sans Pro', Helvetica;
+	display:none;
+	text-align:center;
+}
+
+#steps {
+	width: 95%;
+	padding-top:40px;
+	margin: 0 auto;
+	height: auto;
+	font-size:18pt;
+	font-family: 'futura-pt', 'Source Sans Pro', Helvetica;
+	display:none;
+	text-align: center;
+}
+
+	#debate-party, #debate-date, #debate-time, #next-debate-when, #time-until-debate {
+		display:inline-block;
+	}
+
+	#debate-party, #debate-date, #debate-time, #time-until-debate {
+		font-weight:900;
+	}
+
+.timeframe-text {
+	font-size:14pt;
+	color:steelblue;
+}
+	#step1 {
+		width:inherit;
+		margin:inherit;
+		display:none;
+	}
+	#step2 {
+		width:500px;
+		display:none;
+		margin: inherit;
+		padding-top:5px;
+	}
+	#step2-body {
+		width:inherit;
+		display: inherit;
+		height: inherit;
+		margin:inherit;
+	}
+
+#container-chart{
+	position:absolute;
+	left:-30px;
+	margin-top:10px;
+	width: 100%;
+	display:none;
+	height:550px;
+}
+
+	#chart {
+		width: 900px; 
+		margin: 0 auto;
+		display: inherit;
+		height: auto;
+	}
+
+#loading {
+	position:absolute;
+	top:30%;
+	margin-left: auto;
+	margin-right: auto;
+	left: 0;
+	right: 0;
+	width:100px;
+	display:none;
+	text-align:center;
+	font-size:18pt;
+	height:120px;
+	z-index:3000;
+}
+
+.more-data-coming {
+	position:relative;
+	margin-left:15px;
+	width:500;
+	height:35;
+	z-index:2000;
+	display:inline-block;
+	font-size:11pt;
+	color:rgb(193,35,35);
+}
+
+	#tiny-loading {
+		position:relative;
+		width:20px;
+		height:20px;
+		display:inline-block;
+		margin-left:15px;
+		z-index:2001;
+	}
+
+#container-controls {
+	position:absolute;
+	width:350px;
+	display:none;
+	height:100px;
+	left:10px;
+	bottom:50px;
+	background:lightgray;
+	border: 1px solid gray;
+}
+	#chart-controls {
+		height:30px;
+		text-align:left;
+		margin-left:10px;
+		margin-top:5px;
+	}
+
+
