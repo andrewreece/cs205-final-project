@@ -35,13 +35,13 @@ def template_admini():
 
 
 ''' Sets new default cluster-bake settings from /admini205 '''
-@app.route("/set_default_bake_settings/<x1>/<x2>/<x3>/<x4>/<x5>/<x6>")
-def set_default_bake_settings(x1,x2,x3,x4,x5,x6):
+@app.route("/set_default_bake_settings/<x1>/<x2>/<x3>/<x4>/<x5>/<x6>/<x7>")
+def set_default_bake_settings(x1,x2,x3,x4,x5,x6,x7):
 	try:
 		s3 = boto3.resource('s3')
 		result = s3.Object(bucket_name,settings_key).get()['Body'].read()		
 		settings = json.loads(result)
-		newsets = [x1,x2,x3,x4,x5,x6]
+		newsets = [x1,x2,x3,x4,x5,x6,x7]
 		for s in newsets:
 			k,v = s.split("___")
 			settings[k]["val"] = v
@@ -120,7 +120,7 @@ def check_cluster_status(cid):
 
 ''' Check if GD cluster is currently running '''
 @app.route('/gd_cluster_running')
-def gd_cluster_running(cluster_name="gaugingdebate"):
+def gd_cluster_running(cluster_name="gauging_debate"):
 	try:
 		client  = boto3.client('emr')
 
@@ -139,7 +139,7 @@ def gd_cluster_running(cluster_name="gaugingdebate"):
 		
 		elif ( ('RUNNING' not in states) and ('WAITING' not in states) ):
 			return "0_A sentiment tracker is currently starting up. It takes about 15 minutes to start up \
-					a tracker, please try back soon."
+					#a tracker, please try back soon."
 		
 		else:
 			return "1_Sentiment tracker found! <input type='button' id='start-live-tracking' value='Start Tracking'>..."

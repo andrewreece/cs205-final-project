@@ -25,21 +25,8 @@ var views = { // for toggling between intro and chart views
 
 /* HELPER FUNCTIONS */
 
-
-function roundToTwo(num) {    
-    return +(Math.round(num + "e+2")  + "e-2");
-}
-
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
-// FUNCTION: startSpinner(where)
-// ARGS: 	 where: String object, spinner can load either mid-page or over step3 div
-// PURPOSE:  displays #loading div, spinner animation during AJAX queries
-//
-//////////////////////////////////////////////////////////////////////////////////////////////////////////
 function startSpinner(where) {
-
+	/* displays #loading div, spinner animation during AJAX queries */
 	// see: http://fgnass.github.io/spin.js/
 	var opts = {"loading": 	{
 								lines: 13, // The number of lines to draw
@@ -83,6 +70,12 @@ function startSpinner(where) {
 	var target = document.getElementById(where);
     spinner = new Spinner(opts[where]).spin(target); 
 
+}
+
+
+function roundToTwo(num) {    
+	/* rounds to 2 decimal places */
+    return +(Math.round(num + "e+2")  + "e-2");
 }
 
 
@@ -206,9 +199,6 @@ function updateNextDebateDiv(nearest_delta,nearest_debate) {
 			$("#next-debate-when").html('Is happening now!');
 	} else {
 		$("#next-debate-when").html('It starts in <div id="time-until-debate"></div>.');	
-
-		console.log('nearest debate datetime:');
-		console.log(nearest_debate.datetime);
 
 		var debate_date_obj = new Date(nearest_debate.datetime);
 		debate_date_obj.setMilliseconds(debate_date_obj.getMilliseconds() + timezone_offset);
@@ -377,10 +367,14 @@ function extractFeatures(rawdata, tmp, getrange, timeframe) {
 		*/
 		var offset = (timeframe=="now") ? timezone_offset : 0;
 
+		/* 	X-AXIS: timestamp in milliseconds
+			Y-AXIS: sentiment average
+			ERROR:  +/- Std Dev (NaN if "average" is based off of one tweet
+		*/
 		var millisecond_tstamp = parseInt(tstamp)*1000;
 		tmp[candidate_name].x.push( millisecond_tstamp + offset);
 
-		var sentiment_score = (json.sentiment_avg > 0) ? json.sentiment_avg :  default_starting_score;
+		var sentiment_score = (json.sentiment_avg > 0) ? json.sentiment_avg : NaN;
 		tmp[candidate_name].y.push( roundToTwo(sentiment_score) );
 
 		var sentiment_std = (json.sentiment_std > 0) ? json.sentiment_std : NaN;
@@ -573,16 +567,8 @@ function loadChartData(obj,timeframe) {
 				start_time_oneback = start_time_secs - rounding_interval; // get previous N second interval of data
 
 				if (start_time_secs < end_time_secs) {
-					//console.log('original start time: '+original_start);
-					//console.log('start time: '+new Date(start_time_milli)+' end time: '+new Date(end_time_secs*1000));
-					//console.log('start time secs: '+start_time_secs+', end time milli: '+end_time_secs);
-					console.log('still in loop!');
 
-
-					// for testing only!
-					//start_time_oneback = 1442444460+rounding_interval*fetch_round;
-					
-					console.log('this is start_time_oneback: '+start_time_oneback);
+					console.log('current batchtime (30s back): '+start_time_oneback);
 
 					var json_file = '/get_debate_data/{0}/{1}'.format(start_time_oneback,0);
 

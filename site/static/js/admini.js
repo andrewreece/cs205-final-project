@@ -2,13 +2,9 @@ var cluster_id;						// Global so terminate() has access
 var interval_id, interval_id2;		// setInterval IDs (we need these to stop them)
 var color = "red";					// Toggle, alternates blue/red output on cluster status report (testing only)
 var check_interval = 30000;			// How frequently should we check up on a baking cluster?
-var tweet_interval = 5000;			// How frequently should we pull down new data from SDB?
-var ct = 0;							// ct and max_ct keep track of how many tweets we've displayed in our output
-var max_ct = 40;					// "" ""
-var tnames=['tweets','sentiment']; 	// SDB table names 
 var bake_settings = {};
 var bake_starting_msg = "Starting cluster...stand by for reporting<br />";
-var bake_complete_msg = "CLUSTER IS FULLY BAKED. DATA COMING.";
+var bake_complete_msg = "CLUSTER IS FULLY BAKED. <br />Check <a href='http://gaugingdebate.com/'>main page</a> for streaming data.";
 
 
 function startPeeking(cid, interval) {
@@ -22,19 +18,25 @@ function bake(interval,settings) {
 	/* Spin up a new cluster, then initiate status check loop 
 	   Note: /bake hits run.py, returns json status.  See run.py documentation for more.
 	*/
+	var path;
 
-	var path = '/bake';
+	if ($('#change-defaults').is(':checked')) {
 
-	Object.keys(settings).forEach( function(k) {
-		path += '/'+k+'___'+settings[k].replace(".","_");
-	});
+		path = '/set_default_bake_settings';
 
-	console.log(path);
-	d3.json(path, function(resp) {
-		console.log(resp);
-	});
+		Object.keys(settings).forEach( function(k) {
+			path += '/'+k+'___'+settings[k].replace(".","_");
+		});
 
-	d3.json('/bake', function(data) {
+		console.log('new settings path');
+		console.log(path);
+		d3.json(path, function(resp) {
+			console.log(resp);
+		});
+	}
+
+	path = '/bake';
+	d3.json(path, function(data) {
 		console.log(data);
 		$('#bake-report').html( bake_starting_msg );
 		if (data === null) {
@@ -58,7 +60,6 @@ function ovenPeek(cid) {
 		// If WAITING: Should see only new data, cluster jobs have completed.
 		if ((data.status=="WAITING") || (data.status=="RUNNING")) {
 
-			getData(tnames); 		// pull down SDB data
 			clearInterval(interval_id);	// stop cluster status check loop
 
 			// Print "all done" status
@@ -79,51 +80,6 @@ function ovenPeek(cid) {
 	});
 }
 
-function getData(table_names) {
-	/* Pulls data down from SDB, via Flask
-			- Hits run.py, see run.py for more
-			- Currently returns unprocessed tweets (only a bit of field filtering from Spark)
-		This in mainly the output funciton for the initial PoC...we'll replace this soon.
-		Note: ct, max_ct, tweet_interval are globals!
-	*/
-	$('#tweet').html("Working backwards from latest:<br />");
-	interval_id2 = setInterval(  // We need interval_id2 to stop loop
-		function() { 
-
-			// max_ct is an arbitrary number, determines how many tweets to display as output
-			if (ct < max_ct) {
-
-				ct++;
-				console.log('/pull/'+table_names[0]);
-				console.log('/pull/'+table_names[1]);
-				d3.json('/pull/'+table_names[0], function(error,data) {
-					console.log(data);
-					var data_len = d3.entries(data).length;
-					var ix = data_len - 1;
-					var new_html = "<br /><br />"+JSON.stringify(d3.entries(data)[ix].value);
-					d3.select("#tweet").html( $('#tweet').html()+new_html );
-				});
-
-				d3.json('/pull/'+table_names[1], function(error,data) {
-					var data_len = d3.entries(data).length;
-					var ix = data_len - 1;
-					var new_html = "<br /><br />"+JSON.stringify(d3.entries(data)[ix].value);
-					d3.select("#sentiment").html( $('#sentiment').html()+new_html );
-				});
-			// If we reach maximum number of test outputs, stop the loop, reset ct
-			} else {
-
-				clearInterval(interval_id2);
-				console.log('stopping tweet pull');	
-				ct = 0;
-			}
-		}, 
-		tweet_interval); // How frequently should we check the database?
-	
-}
-
-
-
 function terminate(cid) {
 	/* Terminate EMR cluster (need cluster ID) */
 	d3.text( '/terminate/'+cid, function(data) {
@@ -143,7 +99,6 @@ function terminate(cid) {
 $('#change-defaults').change(
 
 	function() {
-		console.log(this.checked);
 		if (this.checked) {
 			$('#update-settings-container').slideDown();
 		} else {
@@ -156,9 +111,6 @@ $('#change-defaults').change(
 $('#update-settings').on('change', '.change-default', function() {
 	bake_settings[$(this).attr('id')] = $(this).val().replace(".","_");
 });
-
-// Get data from SDB
-$('#pull').click( function() { $('#tweet').html("One moment <br />"); getData(tnames); } );
 
 // Start a new cluster
 $('#bake').click( function() { bake(check_interval,bake_settings); } );

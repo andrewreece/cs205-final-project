@@ -91,12 +91,12 @@ def bake_emr(BUCKET_NAME, SETTINGS_KEY,
 	s3res     = boto3.resource('s3')
 
 	# get bake settings from s3 file (can be adjusted on /admini205)
-	r = s3.Object(BUCKET_NAME,SETTINGS_KEY).get()['Body'].read()		
+	r = s3res.Object(BUCKET_NAME,SETTINGS_KEY).get()['Body'].read()		
 	settings = json.loads(r)
 
 	INSTANCE_TYPES  		 = OrderedDict() 	# Use ordered dict to get master zone first (see below)
-	INSTANCE_TYPES['MASTER'] = settings['Master_Node_Type']['val']	# Master node instance type
-	INSTANCE_TYPES['CORE'] 	 = settings['Core_Node_Type']['val']	# Core node instance type
+	INSTANCE_TYPES['MASTER'] = settings['Master_Node_Type']['val'].replace("_",".")	# Master node instance type
+	INSTANCE_TYPES['CORE'] 	 = settings['Core_Node_Type']['val'].replace("_",".")	# Core node instance type
 
 
 

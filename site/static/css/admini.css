@@ -12,6 +12,20 @@ input[type='button'] {
 	font-size:12pt;
 }
 
+#title {
+	width:100%;
+	display: inline-block;
+	height:47px;
+	font-family: ;'futura-pt','Source Sans Pro', Helvetica;
+	color:rgb(110,110,110);
+	font-size:28pt;
+	margin-bottom:10px;
+	text-align: center;
+
+        background: rgb(235,235,235) url("../visual/twitter-flag.png") no-repeat;
+        background-position: left center;
+}
+
 #intro {
 	margin-top:20px;
 	margin-left:10px;
@@ -22,9 +36,29 @@ input[type='button'] {
 	display:block;
 }
 
+#container {
+	width:100%;
+	margin:auto;
+}
+#ask-box {
+
+	float:left;
+	width:420px;
+	height:500px;
+}
+#receive-box {
+
+	float:left;
+	width:550px;
+	height:500px;
+}
+#clear {
+    clear: both;
+}
+
 #default-settings-container {
 	display:inline-block;
-	width:700px;
+	width:inherit;
 }
 
 	#default-settings {
@@ -49,30 +83,25 @@ input[type='button'] {
 	border:1px solid steelblue;
 }
 
-#bake-report {
-	width:500px;
-	display:block;
-	height:200px;
-	font-family:consolas;
-	border: solid 2px red;
-	overflow:scroll;
-}
 
-#terminate-report {
-	width:500px;
-	display:block;
-	height:40px;
-	font-family:consolas;
-	border: solid 2px gray;
-}
+	#bake-report {
+		width:inherit;
+		display:block;
+		height:90px;
+		font-family:consolas;
+		padding:5px;
+		border: solid 2px rgba(128,0,0,0.5);
+		overflow:scroll;
+	}
+
+	#terminate-report {
+		width:inherit;
+		display:block;
+		height:70px;
+		font-family:consolas;
+		padding:5px;
+		border: solid 2px rgba(130,130,130,0.5);
+	}
 
 
-#tweet, #sentiment {
-	width:600px;
-	display:block;
-	height:200px;
-	font-family:consolas;
-	border: solid 2px steelblue;
-	background-color: lightgray;
-	overflow: scroll;
-}
+
