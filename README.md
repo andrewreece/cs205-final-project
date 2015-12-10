@@ -1,8 +1,8 @@
 ## Gauging Debate: Tracking Sentiment for the 2016 US Elections
 ### Authors: Daniel Rajchwald, Andrew Reece
 
-[GaugingDebate.com](http://gaugingdebate.com) 
-[Screencast](https://www.youtube.com/watch?v=Vj6o-z_ekT8)
+[GaugingDebate.com](http://gaugingdebate.com)   
+[Short video](https://www.youtube.com/watch?v=Vj6o-z_ekT8)
 
 ####Introduction   
 This is the codebase for a real-time Twitter sentiment tracker, focusing on the 2016 US presidential candidates. It provides live and historical analysis for the entire 2016 electoral cycle.  
@@ -13,13 +13,14 @@ All content is licensed under the MIT Open Source License (see below).
 
 
 ####For CS205 Graders  
-See [our final report]().  You can also view [our process journal](https://docs.google.com/document/d/1ncgcKObu8FmFr2-T6JLUhg-GArKaeCCcC7qfIMB1dbc/edit?usp=sharing">process book) for all the gory details.
+See [our final report](https://docs.google.com/document/d/14FZ1wTJc4o78O6IW_lG1xerzGrCdHfYXJ8xAQKVSR0w/edit?usp=sharing).  You can also review [our process journal](https://docs.google.com/document/d/1ncgcKObu8FmFr2-T6JLUhg-GArKaeCCcC7qfIMB1dbc/edit?usp=sharing) for all the step-by-step gory details.
   
 ####Data Pipeline  
 Streaming data travels across several components in order to get from the raw Twitter stream to the app's web interface.  This is a rough diagram of how it happens, more detail below:  
-Twitter stream -> Kafka -> Spark Streaming -> Spark SQL -> SimpleDB -> Flask -> Web
+  
+#####Twitter stream -> Kafka -> Spark Streaming -> Spark SQL -> SimpleDB -> Flask -> Web
 
-<b>Twitter stream</b>
+<b>Twitter stream</b>  
 We can access the Twitter stream through the Twitter developer's API, which provides free access to a small portion of the entire stream of tweets.  Since we were only attempting to acquire a small portion of all tweets anyway (ie. only candidate- or debate-related tweets), the app collects most (but not all) of its target tweets with this free access tier.
 
 <b>Kafka</b>  
@@ -33,6 +34,18 @@ Spark Streaming works more-or-less like normal Spark.  The main abstraction is t
 
 <b>Simple DB</b>  
 Even though the goal was to stream live analytics, we still wanted the ability to (a) keep a buffer of recent past analysis, and (b) make it easy to access both live and historical data. This, on top of the fact that we're not Node.js experts, led us to a storage-based solution, wherein stream data is written to a database, and the front end then queries the most recent records for display.  Simple static databases don't work well with parallelized writes, so platforms like MySQL and SQLite were unavailable to us. Amazon offers a number of database options, and we chose [Simple DB](https://github.com/boto/boto3), a schema-less key-value storage system - mainly because it had a low learning overhead, and we didn't need very sophisticated querying.  SimpleDB can handle concurrent reads and writes, and we can interface with it in Python through [Boto](https://github.com/boto/boto3), which is a truly excellent module.
+
+<b>Flask</b>
+[Flask](http://flask.pocoo.org/) is a Python framework for serving web content. We used it to do all the heavy lifting between the backend and the web interface. It works in conjunction with [Jinja2 templating](http://flask.pocoo.org/).  Just about anything that isn't boilerplate on the website is served through Flask in one way or another.  
+
+<b>Web</b>
+The front-end of [Gauging Debate](http://gaugingdebate.com) relies heavily on a handful of Javascript libraries: [jQuery](http://oboejs.com/), [D3](http://oboejs.com/), [Oboe](http://oboejs.com/), and [Plotly](https://plot.ly/javascript). jQuery and D3 are probably familiar to most readers.  <b>Oboe</b> is a great little library that collects large data requests in little bits, kind of like a pseudo-stream. We used this for the historical debate charts - the entire ~3 hours of debate data is a lot to load all at once, so we use D3 to load the first few minutes and render quickly, and in the background Oboe loads the rest.  When it finishes loading, the chart is refreshed with the full dataset.  <b>Plotly</b> is a charting library built on top of D3, which was just recently (as of Dec 2015) open-sourced.  It's great.  We initially started with [Rickshaw](http://code.shutterstock.com/rickshaw/), but that project is dead and wading through highly idiosyncratic source code with little documentation proved to be a terrible idea.  
+
+The main feature of the front-end is a chart of average tweet sentiment, per candidate, updated once every 30 seconds. (More on that time interval below in Analysis.)  The chart has a lot of built-in customization, including panning and zooming on both axes, error bars, and the ability to add or remove candidates. You can also save any chart view as an image file for download.  (We can't take credit for these great features, that's all Plotly.)  
+
+The web interface allows users to choose either streaming or historical analysis.  In order for streaming data to appear, there needs to be either an AWS cluster running which is processing realtime data, or a Spark instance on someone's local computer which is doing the same.  
+
+There is also an administrator dashboard which allows admins to start up Spark clusters for streaming functionality. The address of this dashboard is not public - if you're on the CS205 staff you should have received this address in an email.  
 
 
 ####Analysis  
@@ -67,7 +80,7 @@ Topical content is determined using [a parallelized adaptation](http://www.datal
 │   │   └── index.html  
 │   └── utils.py  
 └── streaming  
-    ├── bootstrap_actions  
+        ├── bootstrap_actions  
     │   ├── install-basics.sh  
     │   ├── install-kafka.sh  
     │   ├── install-zookeeper.sh  
