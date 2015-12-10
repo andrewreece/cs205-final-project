@@ -22,7 +22,7 @@ If you want to run a local instance yourself, follow the instructions in the fin
 ####Data Pipeline  
 Streaming data travels across several components in order to get from the raw Twitter stream to the app's web interface.  This is a rough diagram of how it happens, more detail below:  
   
-    #####Twitter stream -> Kafka -> Spark Streaming -> Spark SQL -> SimpleDB -> Flask -> Web
+#####    Twitter stream -> Kafka -> Spark Streaming -> Spark SQL -> SimpleDB -> Flask -> Web
 
 <b>Twitter stream</b>  
 We can access the Twitter stream through the Twitter developer's API, which provides free access to a small portion of the entire stream of tweets.  Since we were only attempting to acquire a small portion of all tweets anyway (ie. only candidate- or debate-related tweets), the app collects most (but not all) of its target tweets with this free access tier.
