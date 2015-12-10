@@ -7,17 +7,22 @@ import pyspark.sql.functions as sqlfunc
 from pyspark.sql.types import *
 
 search_terms = []
-n_parts = 10
+n_parts = 10 # number of paritions for RDD
 
 def get_search_json(fname):
+    ''' Retrieves list of debate-related search terms, converts to dict 
+        Note: If we eventually start allowing custom search terms, we'll need to make sure 
+              that the temporary file holding the custom search terms has a similar structure. '''
+
 	f = open(fname,'r')
 	rawdata = f.readlines()
 	f.close()
 	jdata = json.loads(rawdata[0])
 	return jdata
 
+
 def pool_search_terms(j):
-    ''' Short recursive routine to pull out all search terms in search-terms.json '''
+    ''' Short recursive routine to pull out all search terms in search-terms.json into a flattened list '''
     if isinstance(j,dict):
         for j2 in j.values():
             pool_search_terms(j2)
@@ -25,22 +30,31 @@ def pool_search_terms(j):
         search_terms.extend( j )
     return search_terms
 
-def is_cluster_running():
+
+def get_hostname():
+    ''' Determines whether we have a cluster up and running,
+        If so, returns master node private IP address for cluster coordination in spark-output.py '''
+
     import boto3
     client = boto3.client('emr')
-
     ''' list_clusters() is used here to find the current cluster ID
         WARNING: this is a little shaky, as there may be >1 clusters running in production
                  better to search by cluster name as well as state
+
+        UPDATE 09 DEC: The GD cluster has the name "gauging_debate", so we can definitely restrict
+                        list_clusters by that. (I think we actually already do that in another script,
+                        maybe just find that and copy the code over here.)
     '''
     clusters = client.list_clusters(ClusterStates=['RUNNING','WAITING','BOOTSTRAPPING'])['Clusters']
 
     clusters_exist = len(clusters) > 0
     if clusters_exist:
         cid = clusters[0]['Id']
+        master_instance = client.list_instances(ClusterId=cid,InstanceGroupTypes=['MASTER'])
+        hostname        = master_instance['Instances'][0]['PrivateIpAddress']
     else:
-        cid = None
-    return clusters_exist, cid
+        hostname = None
+    return hostname
 
 
 def update_tz(d,dtype,only_tstamp=False):
@@ -50,6 +64,7 @@ def update_tz(d,dtype,only_tstamp=False):
     else:
         tstamp = d[1]
     def convert_timezone(item,item_is_only_tstamp=False):
+        ''' This interior function to update_tz does the actual conversion of timezones '''
         if item_is_only_tstamp:
             dt = item 
         else:
@@ -59,14 +74,34 @@ def update_tz(d,dtype,only_tstamp=False):
         to_zone = tz.gettz('America/New_York')
         utc = dt.replace(tzinfo=from_zone)
         return utc.astimezone(to_zone)
-    if dtype == "sql":
+    if dtype == "sql": # if our return value is for Spark SQL
         return Row(id=d[0], time=convert_timezone(tstamp))
-    elif dtype == "pandas":
+    elif dtype == "pandas": # if our return value is for non-Spark SQL (probably Pandas)
         return convert_timezone(tstamp,only_tstamp)
 
 
 def make_json(tweet,interval):
-    ''' Get stringified JSOn from Kafka, attempt to convert to JSON '''
+    ''' Get stringified JSOn from Kafka, attempt to convert to JSON 
+
+        Note: The interval argument is BATCH_DURATION, ie. how many seconds each DStream collects for.
+              This is important here because we use it to round all tweet timestamps to a 'batchtime' 
+              timestamp, which is rounded to the floor of the nearest interval.
+
+                Eg. interval = 30s, tstamp = 08:10:28 --> batchtime = 08:10:00
+                    interval = 30s, tstamp = 08:10:32 --> batchtime = 08:10:30
+
+        We still retain the actual tweet timestamp, but the batchtime is what we use to store and
+        retrieve data from SDB (and it's how we render the chart on the front-end 
+
+
+        WARNING: There seems to be a problem with the way we adjust for localtime here.
+                 As of 09 DEC, the epoch timestamp that comes out of this function is not correctly 
+                 adjusting to EST (GMT-0400 or GMT-0500 depending on DST). 
+                 You currently take care of this on the front-end with a conditional offset (because
+                 you do store the timezoned-timestamp correctly with the archival data, so you need an
+                 if-statement to figure out whether to add an extra offset). 
+                 But you should really fix this here.  It shouldn't be too hard to fix it. You're just
+                 short on time at this writing. '''
     try:
         dt           = datetime.now()
         tstamp       = datetime(dt.year, dt.month, dt.day, dt.hour, dt.minute,interval*(dt.second // interval))

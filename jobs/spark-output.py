@@ -25,9 +25,7 @@ on_cluster = (path == "/home/hadoop")
 
 if on_cluster:
 	path += '/scripts/'
-	cluster_running, cid = is_cluster_running()
-	master_instance = client.list_instances(ClusterId=cid,InstanceGroupTypes=['MASTER'])
-	hostname 		= master_instance['Instances'][0]['PrivateIpAddress']
+	hostname = get_hostname()	
 else:
 	import findspark
 	findspark.init()
