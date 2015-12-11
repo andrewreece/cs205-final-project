@@ -1,6 +1,10 @@
 ## Gauging Debate: Tracking Sentiment for the 2016 US Elections
 ### Authors: Daniel Rajchwald, Andrew Reece
 
+####Contact Email: Andrew Reece reece@g.harvard.edu  
+
+####Quick links  
+
 [GaugingDebate.com](http://gaugingdebate.com/)   
 [Intro video (2 min)](https://www.youtube.com/watch?v=Vj6o-z_ekT8)  
 [Full report](http://gaugingdebate.com/about)    
@@ -11,6 +15,12 @@ This is the codebase for a real-time Twitter sentiment tracker application calle
 
 This work is the authors' final project for [CS205](http://cs205.org), Fall semester 2015, at Harvard University.   
 This course, titled "Computing Foundations for Computational Science", emphasized the use of parallelism for making things scalable and efficient.  In part, this work is an exercise in building proficiency with [Apache Spark](http://spark.apache.org/) as a scalable distributed computing platform.  In particular, we utilized [Spark's streaming capabilities](http://spark.apache.org/docs/latest/streaming-programming-guide.html) to process incoming Twitter data in realtime.  For more information, see our [full report](http://gaugingdebate.com/about).  
+
+#####Important:  
+The app is working and can be used at [GaugingDebate.com](http://gaugingdebate.com). Actually running the code from scratch requires installing Zookeeper and Kafka, and hosting a Zookeeper service and a Kafka broker on either your local machine or on a cluster (where all nodes can see the Kafka broker) - all this in addition to running Spark.  You also need access to our S3 bucket for credentials and configuration files (not posted to this repo), which is public but doesn't always load correctly from Spark instances, depending on the version and whether or not it's local or on an AWS cluster.  
+
+All of which is to say, if you are determined to build this app from source, please contact the authors and we'll help you get up and running!  
+<br /><br />
 
 All content is provided under the MIT Open Source License (see below).
 
