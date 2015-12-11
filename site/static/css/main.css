@@ -19,16 +19,46 @@ input[type='button'] {
 #title {
 	width:100%;
 	display: inline-block;
-	height:47px;
+	height:37px;
 	font-family: ;'futura-pt','Source Sans Pro', Helvetica;
 	color:rgb(110,110,110);
-	font-size:28pt;
+	font-size:22pt;
 	margin-bottom:10px;
-	text-align: center;
+	padding-left:90px;
 
-        background: rgb(235,235,235) url("../images/twitter-flag.png") no-repeat;
-        background-position: left center;
+    background: rgb(235,235,235) url("../images/twitter-flag.png") no-repeat;
+    background-position: left center;
 }
+
+#nav {
+	position: absolute;
+	top:8px;
+	right:0px;
+	width:130px;
+	height:auto;
+	display:inline-block;
+	z-index:10;
+}
+
+a.nav {
+	text-decoration: none;
+}
+
+.nav-icon {
+	width:25px;
+	height:25px;
+	margin: 0 auto;
+	padding:4px;
+}
+
+.nav-icon.lighter {
+	opacity:0.7;
+}
+
+#clear {
+    clear: both;
+}
+
 
 #next-debate-info {
 	position: relative;
