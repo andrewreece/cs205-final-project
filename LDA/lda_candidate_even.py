@@ -1,15 +1,70 @@
+
 from __future__ import division
 import numpy as np
 import pyspark
-from pyspark.mllib.clustering import LDA, LDAModel
-from pyspark.mllib.linalg import Vectors
 from operator import add
-import matplotlib.pyplot as plt
 import collections
-from math import gamma
 import time
+import os
+import json
 
 sc = pyspark.SparkContext(appName = "Spark1")
+
+def make_json(tweet):
+    ''' Get stringified JSOn from Kafka, attempt to convert to JSON '''
+    try:
+        return json.loads(tweet.decode('utf-8'))
+    except:
+        return "error"+str(tweet.decode('utf-8'))
+
+def filter_tweets(item,pattern):
+    ''' Filters out the tweets we do not want.  Filters include:
+            * No retweets 
+            * No geolocation or location field (do we really care about this?)
+            * English language only
+            * No tweets with links
+                - We need to check both entities and media fields for this (is that true?)
+    '''
+    return (('delete' not in item.keys()) and
+            ('retweeted_status' not in item.keys())                           and 
+            (item['lang']=='en')                       and
+            (len(item['entities']['urls'])==0)                   and
+            ('media' not in item['entities'].keys()) and
+            (re.search(pattern,item['text'],re.I) is not None)
+           )
+
+def get_relevant_fields(item):
+    ''' Reduce the full set of metadata down to only those we care about, including:
+            * timestamp
+            * username
+            * text of tweet 
+            * hashtags
+            * geotag coordinates (if any)
+            * location (user-defined in profile, not necessarily current location)
+    '''
+    return (item['id'], 
+            {"timestamp":  item['created_at'],
+             "username":    item['user']['screen_name'],
+             "text":        item['text'],
+             "hashtags":    [el['text'] for el in item['entities']['hashtags']],
+             "geotag":    item['geo'],
+             "user_loc":    item['user']['location']
+            }
+           )
+
+def update_tz(d,dtype):
+    
+    def convert_timezone(item):
+        from_zone = tz.gettz('UTC')
+        to_zone = tz.gettz('America/New_York')
+        dt = parser.parse(item['timestamp'])
+        utc = dt.replace(tzinfo=from_zone)
+        return utc.astimezone(to_zone)
+    
+    if dtype == "sql":
+        return Row(id=d[0], time=convert_timezone(d[1]))
+    elif dtype == "pandas":
+        return convert_timezone(d[1])
 
 
 def getTweet(string):
@@ -37,11 +92,7 @@ def getLogLik(allWords,nTopics,wordTopicCounters,topicCounters,beta):
     return logLik
 
 def logGamma2(num):
-    if num < 170:
-        return np.log(gamma(num))
-    else:
-        num = num - 1
-        return np.log(np.sqrt(2*np.pi*num)) + num*np.log(num/np.exp(1))
+    return np.log(np.sqrt(2*np.pi*num)) + num*np.log(num/np.exp(1))
 
 def findWord(wordArray,target):
     index = []
@@ -56,10 +107,9 @@ def findWord2(words,target):
         if words[ii:ii+len(target)] == target:
             index.append(ii)
     return index
-
+"""
 def preProcessWords(texts):
    
-    #texts = texts[0]
     wordDocDict = {}
     wordDocDictNU = {}
     nDocs = len(texts)
@@ -91,6 +141,64 @@ def preProcessWords(texts):
    
     allWords = []
     docLabel = []
+
+    f = open('/home/hadoop/stop_words.txt')
+    stopWords = f.read()
+    f.close()
+    stopWords = stopWords.split()
+   
+    remW = set(stopWords+[''])
+   
+    filter1 = np.array([True]*len(uniqueWords))
+    for ii in xrange(0,len(uniqueWords)):
+        if uniqueWords[ii] in remW:
+            filter1[ii] = False
+   
+    uniqueWords = uniqueWords[filter1]
+    nuWordDocLabels = nuWordDocLabels[filter1]
+    nInstances = nInstances[filter1]
+   
+    for ii in xrange(0,len(uniqueWords)):
+        allWords = allWords + [uniqueWords[ii]]*len(nuWordDocLabels[ii])
+        docLabel = docLabel + nuWordDocLabels[ii]
+       
+    return (np.array(allWords), np.array(docLabel))
+"""
+
+def preProcessWords(texts):
+   
+    #texts = texts[0]
+    wordDocDict = {}
+    wordDocDictNU = {}
+    nDocs = len(texts)
+    
+    for ii in xrange(0,nDocs):
+        textString = texts[ii].lower().split()
+        for jj in xrange(0,len(textString)):
+            if jj == 0:
+                tempText = textString[jj][1:]
+            elif jj == len(textString)-1:
+                tempText = textString[jj][:-1]
+            else:
+                tempText = textString[jj]
+            if tempText in wordDocDict:
+                wordDocDict[tempText].add(ii)
+                wordDocDictNU[tempText].append(ii)
+            else:
+                wordDocDict[tempText] = set([ii])
+                wordDocDictNU[tempText] = [ii]
+    uniqueWords = np.array(wordDocDict.keys())
+    uniqueWordDocLabels = np.array(wordDocDict.values())
+    nuWordDocLabels = np.array(wordDocDictNU.values())
+    nDocPerWord = np.array(map(lambda x: len(x),uniqueWordDocLabels))
+   
+    # only keep words that appear in at least 5 tweets
+    uniqueWords = uniqueWords[nDocPerWord > 0]
+    nuWordDocLabels = nuWordDocLabels[nDocPerWord > 0]
+    nInstances = np.array(map(lambda x: len(x),nuWordDocLabels))
+   
+    allWords = []
+    docLabel = []
    
     remW = set([ii.lower() for ii in ['@', 'me', 'my', '-', 'the', 'is', 'it', 'in', 'just',\
      'for', 'was', 'no', 'when', 'not', 'that', 'and', 'take',\
@@ -114,14 +222,27 @@ def preProcessWords(texts):
        
     return (np.array(allWords), np.array(docLabel))
 
+
 def drawTopicInit(allWords,docLabel,nTopics,alpha,beta):
    
     vocab = np.unique(allWords)
     nVocab = len(vocab)
-    wordTopicCounters = {ii:collections.Counter() for ii in vocab}
-    docTopicCounters = {ii:collections.Counter() for ii in np.unique(docLabel)}
-    topicCounters = {ii:0 for ii in xrange(0,nTopics)}
-    docCounters = {ii:0 for ii in np.unique(docLabel)}
+
+    wordTopicCounters = {}
+    docTopicCounters = {}
+    topicCounters = {}
+    docCounters = {}
+    for ii in vocab:
+        wordTopicCounters[ii] = {}
+        for jj in xrange(nTopics):
+            wordTopicCounters[ii][jj] = 0
+    for ii in np.unique(docLabel):
+        docTopicCounters[ii] = {}
+        for jj in xrange(nTopics):
+            docTopicCounters[ii][jj] = 0
+        docCounters[ii] = 0
+    for ii in xrange(nTopics):
+        topicCounters[ii] = 0
    
     topicVector = np.zeros(len(allWords))
    
@@ -199,7 +320,7 @@ def stationaryLDA(WordDocVec_OrderedPair):
 
     allWords = WordDocVec_OrderedPair[0]
     docLabel = WordDocVec_OrderedPair[1]
-    nTopics = 50 
+    nTopics = 10 
     uniqueWords = np.unique(allWords)
     uniqueDocs = np.unique(docLabel)
     nVocab = len(uniqueWords)
@@ -237,7 +358,7 @@ def stationaryLDA(WordDocVec_OrderedPair):
             for jj in xrange(0,nTopics):
                 theta[ii,jj] = (docTopicCounters[uniqueDocs[ii]][jj] + alpha)/(sumCurr + nTopics*alpha)
         logLik[count+1] = getLogLik(allWords,nTopics,wordTopicCounters,topicCounters,beta)
-        print "first time: ",logLik
+        #print "first time: ",logLik
         count = count + 1
     """
     for ii in uniqueWords:
@@ -265,7 +386,7 @@ def stationaryLDA_post(WordDocVec_OrderedSet):
     allWords = WordDocVec_OrderedSet[10]
     docLabel = WordDocVec_OrderedSet[11]
 
-    nTopics = 50 
+    nTopics = 10 
 
     """
     for ii in uniqueWords:
@@ -290,9 +411,12 @@ def stationaryLDA_post(WordDocVec_OrderedSet):
     while count < nIterations:
         for ii in xrange(0,len(allWords)):
             if wordTopicCounters[allWords[ii]][topicLabel[ii]] <= 0:
-                print "ith word: ", ii
-                print "value outside: ", allWordCounts[allWords[ii]][topicLabel[ii]]
-                print "value inside: ", wordTopicCounters[allWords[ii]][topicLabel[ii]]
+                print "word index: ", ii
+                print "word: ", allWords[ii]
+                print "topic label: ",topicLabel[ii]
+                print "topic count: ", allWordCounts[allWords[ii]][topicLabel[ii]]
+                print "value outside: ", allWordCounts[allWords[ii]]#[topicLabel[ii]]
+                print "value inside: ", wordTopicCounters[allWords[ii]]#[topicLabel[ii]]
                 asdf
             topic, wordTopicCounters, docTopicCounters, topicCounters = drawTopic(ii,allWords,\
                               topicLabel,docLabel,nTopics,wordTopicCounters, docTopicCounters, \
@@ -308,93 +432,192 @@ def stationaryLDA_post(WordDocVec_OrderedSet):
             for jj in xrange(0,nTopics):
                 theta[ii,jj] = (docTopicCounters[uniqueDocs[ii]][jj] + alpha)/(sumCurr + nTopics*alpha)
         logLik[count+1] = getLogLik(allWords,nTopics,wordTopicCounters,topicCounters,beta)
-        print "second time: ",logLik
+        #print "second time: ",logLik
         count = count + 1
 
     return (theta, phi, logLik, uniqueWords, uniqueDocs, topicLabel,\
                                             wordTopicCounters, topicCounters, docTopicCounters, docCounters,allWords,docLabel)
 
-def synchronizeCounts(WordDocVec_OrderedSet,allWordCounts,allTopicCounts):
+def synchronizeCounts(WordDocVec_OrderedSet,allWordCountsL,allTopicCountsL):
     
     uniqueWords = WordDocVec_OrderedSet[3]
     topicLabel = WordDocVec_OrderedSet[5]
     allWords = WordDocVec_OrderedSet[10]
     wordTopicCountCurr = WordDocVec_OrderedSet[6]
     # after extracting the 4 variables above for the current partition, compare the partition's 
-    # word-topic counts dictionary, "wordTopicCountCurr", to the accumulated word topic counts "allWordCounts"
+    # word-topic counts dictionary, "wordTopicCountCurr", to the accumulated word topic counts "allWordCountsL"
     for ii in uniqueWords:
         for jj in xrange(nTopics):
-            if allWordCounts[ii][jj] < sum((topicLabel == jj) & (allWords == ii)):
-                print "sync counts: ",allWordCounts[ii][jj],"old counts: ",wordTopicCountCurr[ii][jj]," present value: ",sum((topicLabel == jj) & (allWords == ii))                
+            if allWordCountsL[ii][jj] < sum((topicLabel == jj) & (allWords == ii)):
+                print "sync counts: ",allWordCountsL[ii][jj],"old counts: ",wordTopicCountCurr[ii][jj]," present value: ",sum((topicLabel == jj) & (allWords == ii))                
                 asdf
       
     return (WordDocVec_OrderedSet[0],WordDocVec_OrderedSet[1],WordDocVec_OrderedSet[2],\
             WordDocVec_OrderedSet[3],WordDocVec_OrderedSet[4],WordDocVec_OrderedSet[5],\
-            allWordCounts.copy(),allTopicCounts.copy(),WordDocVec_OrderedSet[8],WordDocVec_OrderedSet[9],\
+            allWordCountsL.copy(),allTopicCountsL.copy(),WordDocVec_OrderedSet[8],WordDocVec_OrderedSet[9],\
             WordDocVec_OrderedSet[10],WordDocVec_OrderedSet[11])
 
-numPart = 5
-allTweets = sc.textFile('filtered.txt') 
-allTweets = sc.parallelize(allTweets.map(getTweet).collect(),numPart).map(lambda x: (len(x)%5,x)).partitionBy(numPart).cache() 
-allTweets = allTweets.groupByKey().mapValues(list) # (partitionNum, [['tweet1','tweet2','tweet3',...]])
+f = open('search-terms.json','r')
+j = f.readlines()
+f.close()
+searchj = json.loads(j[0])
 
-#print allTweets.collect()[0][1][0][:5]
+demoDict = searchj['candidates']['democrat']
+gopDict = searchj['candidates']['gop']
 
-allTweets = allTweets.mapValues(preProcessWords) # (partitionNum, (wordVec,docVec))
+demoCand = demoDict.keys()
+gopCand = gopDict.keys()
+
+termList = []
+candList = []
+
+for ii in demoCand:
+    for jj in demoDict[ii]:
+        termList.append(jj)
+        candList.append(ii)
+
+for ii in gopCand:
+    for jj in gopDict[ii]:
+        termList.append(jj)
+        candList.append(ii)
+
+termList = np.array(termList)
+candList = np.array(candList)
+
+def getCandidate(tweet):
+    tweetWords = tweet.split()
+    for ii in xrange(len(tweetWords)):
+        currWord = tweetWords[ii].lower()
+        countCand = 0
+        for kk in termList:
+            if np.array(kk.lower()) != np.array("rand"):
+                if len(kk) <= len(currWord):
+                    for ll in xrange(len(currWord)-len(kk)):
+                        if np.array(kk.lower()) == np.array(currWord[ll:ll+len(kk)]):
+                            return candList[countCand]
+            else:
+                if np.array(kk.lower()) == np.array(currWord):
+                    return candList[countCand]
+            countCand = countCand + 1
+    return 'general'
+
+numPart = 8
+numIt = 300
+nTopics = 10
+
+
+data = open('zipTweets_candidate_even.txt','r')
+tweets = data.read()
+data.close()
+
+tweets = tweets.split('&&&&&')[:-1]
+
+tweets = sc.parallelize([tweet[:-1] for tweet in tweets])
+
+
+
+allTweets = tweets.zipWithIndex().map(lambda x: (x[1]%numPart,x[0])).partitionBy(numPart)
+
+allTweets = allTweets.groupByKey().mapValues(list).cache() # (partitionNum, ['tweet1a tweet2a ...','tweet1b tweet2b ...','tweet1c tweet2c ...',...])
+
+op = allTweets.collect()
+
+"""
+for hh in xrange(numPart):
+    #for ii in xrange(len(op[hh][1])):
+        #print op[0][1][ii]
+        #print hh,len(op[hh][1][ii].split())
+    print hh,sum([len(op[hh][1][ii].split()) for ii in xrange(len(op[hh][1]))])
+asdf
+"""
+
+partitionCand = [{} for ipart in xrange(numPart)]
+
+for ipart in xrange(numPart):
+    countC = 0
+    for doc in op[ipart][1]:
+        firstString = doc[:200]
+        candidateL = getCandidate(firstString)
+        partitionCand[ipart][countC] = candidateL
+        countC += 1
+
+
+allTweets = allTweets.mapValues(preProcessWords).cache() # (partitionNum, (wordVec,docVec))
+
+"""
+vals = allTweets.collect()[0][1]
+
+print vals[0]
+print len(vals[0])
+print np.unique(vals[0])
+print len(np.unique(vals[0]))
+
+asdf
+"""
 
 #print allTweets.collect()[0][1][0][:20]
 
 startT = time.time()
-allTweets = allTweets.mapValues(stationaryLDA) # (partitionNum, (theta,phi,logLik,uWords,uDocs,topicLabel,\
+allTweets = allTweets.mapValues(stationaryLDA).cache() # (partitionNum, (theta,phi,logLik,uWords,uDocs,topicLabel,\
                                                # wordTopicCounters, topicCounters, docTopicCounters, docCounters, allWords, docLabel))
 
 orderedPairs = allTweets.collect()
 
-nTopics = 50
 # accumulate word-topic and topic counts across partitions
 allWordCounts = {}
-allTopicCounts = {ii:0 for ii in xrange(0,nTopics)}
+allTopicCounts = {}
+for ii in xrange(nTopics):
+    allTopicCounts[ii] = 0
+
+logLikMat = np.zeros((numIt*2,numPart))
 for ii in xrange(numPart):
     # current partition's word-topic counts dictionary
     currWordTopicCounter = orderedPairs[ii][1][6]
-    
+    logLikMat[0:2,ii] = orderedPairs[ii][1][2]
     for jj in currWordTopicCounter.keys():
         if jj not in allWordCounts:
-            allWordCounts[jj] = collections.Counter()
+            allWordCounts[jj] = {}
+            for uu in xrange(nTopics):
+                allWordCounts[jj][uu] = 0
         for kk in currWordTopicCounter[jj].keys():
             allWordCounts[jj][kk] += currWordTopicCounter[jj][kk]
             allTopicCounts[kk] += currWordTopicCounter[jj][kk]
 
-# verify accumulated word-topic counts are greater than or equal to corresponding values in each parition
-for ii in xrange(numPart):
-    currWordTopicCounter = orderedPairs[ii][1][6]
-   
-    uniqueWordsT = orderedPairs[ii][1][3]
-    topicLabelT = orderedPairs[ii][1][5]
-    allWordsT = orderedPairs[ii][1][10]
-    
-    for jj in uniqueWordsT:
-        for kk in xrange(nTopics):
-            if allWordCounts[jj][kk] < sum((topicLabelT == kk) & (allWordsT == jj)):
-                print "initial total counts: ",allWordCounts[jj][kk] ," present value: ",sum((topicLabelT == kk) & (allWordsT == jj))
-                asdf # break command
-
 # code currently break here in "synchronizeCounts", see "synchronizeCounts" above
-allTweets = allTweets.mapValues(lambda x: synchronizeCounts(x,allWordCounts.copy(),allTopicCounts.copy()))
+#allTweets = allTweets.mapValues(lambda x: synchronizeCounts(x,allWordCounts.copy(),allTopicCounts.copy()))
+allTweets = allTweets.mapValues(lambda x: (x[0],x[1],x[2],x[3],x[4],x[5],allWordCounts.copy(),\
+                                            allTopicCounts.copy(),x[8],x[9],x[10],x[11])).cache()
+
 allTweets.count()
 allWordCounts0 = allWordCounts.copy()
 
-for numIt in xrange(1):
-    allTweets = allTweets.mapValues(stationaryLDA_post)
+"""
+vocabulary = allWordCounts0.keys()
+
+print vocabulary
+print len(vocabulary)
+
+asdf
+"""
+
+for numIt in xrange(numIt-1):
+    #print "iteration: ",numIt
+    allTweets = allTweets.mapValues(stationaryLDA_post).cache()
 
     orderedPairs = allTweets.collect()
     allWordCounts = {}
-    allTopicCounts = {ii:0 for ii in xrange(0,nTopics)}
+    allTopicCounts = {}
+    for ii in xrange(nTopics):
+        allTopicCounts[ii] = 0
+    
     for ii in xrange(numPart):
         currWordTopicCounter = orderedPairs[ii][1][6]
+        logLikMat[2*(numIt+1):2*(numIt+1)+2,ii] = orderedPairs[ii][1][2]
         for jj in currWordTopicCounter.keys():
             if jj not in allWordCounts:
-                allWordCounts[jj] = collections.Counter()
+                allWordCounts[jj] = {}
+                for uu in xrange(nTopics):
+                    allWordCounts[jj][uu] = 0
             for kk in currWordTopicCounter[jj].keys():
                 allWordCounts[jj][kk] += currWordTopicCounter[jj][kk]
 
@@ -406,57 +629,56 @@ for numIt in xrange(1):
             allTopicCounts[jj] += allWordCounts[ii][jj]
 
     allWordCounts0 = allWordCounts.copy()
-    allTweets = allTweets.mapValues(synchronizeCounts).cache()
+    allTweets = allTweets.mapValues(lambda x: (x[0],x[1],x[2],x[3],x[4],x[5],allWordCounts.copy(),\
+                                            allTopicCounts.copy(),x[8],x[9],x[10],x[11])).cache()
 
+
+allDocCounts = {}
+allDocs = {}
+for ii in xrange(numPart):
+    currDocTopicCounter = orderedPairs[ii][1][8]
+    for jj in currDocTopicCounter.keys():
+        candTemp = partitionCand[ii][jj]
+        if candTemp not in allDocCounts:
+            allDocCounts[candTemp] = {}
+            for uu in xrange(nTopics):
+                allDocCounts[candTemp][uu] = 0
+        for kk in currDocTopicCounter[jj].keys():
+            allDocCounts[candTemp][kk] += currDocTopicCounter[jj][kk]
+            if candTemp not in allDocs:
+                allDocs[candTemp] = currDocTopicCounter[jj][kk]
+            else:
+                allDocs[candTemp] += currDocTopicCounter[jj][kk]
 
 uniqueWords = np.array(allWordCounts.keys())
 nVocab = len(uniqueWords)
 phi = np.zeros((nTopics,nVocab))
 beta = 0.01
+alpha = 0.001
 for ii in xrange(0,nTopics):
     sumCurr = allTopicCounts[ii]
     for jj in xrange(0,nVocab):
         phi[ii,jj] = (allWordCounts[uniqueWords[jj]][ii] + beta)/(sumCurr + nVocab*beta)
 
-for ii in xrange(50):
-    print uniqueWords[findWord(phi[ii,:]>.015,True)]
+uniqueCand = np.array(allDocs.keys())
+nCand = len(uniqueCand)
+theta = np.zeros((nCand,nTopics))
+for ii in xrange(0,nCand):
+    sumCurr = allDocs[uniqueCand[ii]]
+    for jj in xrange(0,nTopics):
+        theta[ii,jj] = (allDocCounts[uniqueCand[ii]][jj] + alpha)/(sumCurr + nTopics*alpha)
+
+for ii in xrange(nTopics):
+    print uniqueWords[np.argsort(phi[ii,:])[-10:]]
+
+for ii in xrange(nCand):
+    topTopic = np.argsort(theta[ii,:])[-1]
+    print uniqueCand[ii], ': ',uniqueWords[np.argsort(phi[topTopic,:])[-10:]]
 
 endT = time.time()
 print "total time: ",endT-startT
+np.savetxt('logLik_candidate_even.txt',logLikMat)
 
-#allTweets = allTweets.mapValues(verifyCounts)
-#allTweets.count()
-
-#main extras
-"""
-    uniqueWordsT = orderedPairs[ii][1][3]
-    topicLabelT = orderedPairs[ii][1][5]
-    allWordsT = orderedPairs[ii][1][10]
-    
-    for jj in uniqueWordsT:
-        for kk in xrange(nTopics):
-            if currWordTopicCounter[jj][kk] != sum((topicLabelT == kk) & (allWordsT == jj)):
-                print "main inside counts: ",currWordTopicCounter[jj][kk] ," present value: ",sum((topicLabelT == kk) & (allWordsT == jj))
-                asdf
-    """
-
-# synchronize counts extras
-"""
-    allWordCountsS = {}
-    allTopicCountsS = {ii:0 for ii in xrange(nTopics)}
-
-    for jj in allWordCounts.keys():
-        if jj not in allWordCountsS:
-            allWordCountsS[jj] = collections.Counter()
-        for kk in allWordCounts[jj].keys():
-            allWordCountsS[jj][kk] = allWordCounts[jj][kk]
-            allTopicCountsS[kk] += allWordCounts[jj][kk]
-    for jj in xrange(nTopics):
-        assert allTopicCountsS[jj] == allTopicCounts[jj], "topic counts different"
-    for jj in allWordCounts.keys():
-        for kk in allWordCounts[jj].keys():
-            assert allWordCounts[jj][kk] == allWordCountsS[jj][kk], "word counts different"
-    """
 
 
 
