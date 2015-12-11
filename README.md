@@ -7,7 +7,7 @@
 
 
 ####Introduction   
-This is the codebase for a real-time Twitter sentiment tracker, focusing on the 2016 US presidential candidates. It provides live and historical analysis for the entire 2016 electoral cycle.  
+This is the codebase for a real-time Twitter sentiment tracker application called Gauging Debate.  The app focuses on the 2016 US presidential candidates. Currently in beta (as of Dec 2015), the goal of the app is to provide both live-streaming and historical analysis for the entire 2016 electoral cycle.  
 
 This work is the authors' final project for [CS205](http://cs205.org), Fall semester 2015, at Harvard University.   
 This course, titled "Computing Foundations for Computational Science", emphasized the use of parallelism for making things scalable and efficient.  In part, this work is an exercise in building proficiency with [Apache Spark](http://spark.apache.org/) as a scalable distributed computing platform.  In particular, we utilized [Spark's streaming capabilities](http://spark.apache.org/docs/latest/streaming-programming-guide.html) to process incoming Twitter data in realtime.  For more information, see our [full report](http://gaugingdebate.com/about).
