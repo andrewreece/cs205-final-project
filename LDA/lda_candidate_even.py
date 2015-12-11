@@ -522,14 +522,14 @@ allTweets = allTweets.groupByKey().mapValues(list).cache() # (partitionNum, ['tw
 
 op = allTweets.collect()
 
-
+"""
 for hh in xrange(numPart):
     #for ii in xrange(len(op[hh][1])):
         #print op[0][1][ii]
         #print hh,len(op[hh][1][ii].split())
     print hh,sum([len(op[hh][1][ii].split()) for ii in xrange(len(op[hh][1]))])
 asdf
-
+"""
 
 partitionCand = [{} for ipart in xrange(numPart)]
 
